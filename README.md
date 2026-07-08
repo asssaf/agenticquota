@@ -128,3 +128,21 @@ To supply the API key securely on GAE without checking secrets into version cont
 > [!IMPORTANT]
 > `env_variables.yaml` is ignored by git (configured in `.gitignore`) to ensure your secrets are never committed to your repository.
 
+---
+
+## Integration Testing with dev_appserver.py
+
+We provide a script to run integration tests using the App Engine Local Development Server (`dev_appserver.py`):
+
+```bash
+./scripts/run_integration.sh
+```
+
+This script:
+1. Verifies that `dev_appserver.py` is present in your command line search path.
+2. Checks for or temporarily generates `env_variables.yaml`.
+3. Launches the dev server in the background on port `8085`.
+4. Executes curl integration calls verifying API authentication, GET behavior when empty (404), POST behavior (200), and GET matching of posted payloads.
+5. Shuts down the background dev server cleanly upon completion or error.
+
+
