@@ -130,6 +130,26 @@ To supply the API key securely on GAE without checking secrets into version cont
 
 ---
 
+## Running locally with dev_appserver.py
+
+You can run the App Engine local development server manually to test the application using the configuration files:
+
+```bash
+# 1. Make sure env_variables.yaml is configured
+cp env_variables.yaml.template env_variables.yaml
+# Edit env_variables.yaml to configure your QUOTA_API_KEY
+
+# 2. Start the local development server (binds to localhost on port 8080 by default)
+dev_appserver.py app.yaml
+
+# Or customize port and bind to all interfaces (0.0.0.0) for external access:
+dev_appserver.py --host=0.0.0.0 --port=8080 app.yaml
+```
+
+The server dynamically loads `app.yaml`, merges `env_variables.yaml` for configuration and environment variables, and starts the Go web service. Using `--host=0.0.0.0` makes the development server listen on all network interfaces rather than just localhost loopback.
+
+---
+
 ## Integration Testing with dev_appserver.py
 
 ### 1. Prerequisites (Local SDK Installation)
