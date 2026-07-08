@@ -142,11 +142,13 @@ cp env_variables.yaml.template env_variables.yaml
 # 2. Start the local development server (binds to localhost on port 8080 by default)
 dev_appserver.py app.yaml
 
-# Or customize port and bind to all interfaces (0.0.0.0) for external access:
-dev_appserver.py --host=0.0.0.0 --port=8080 app.yaml
+# Or customize port, bind to all interfaces, and disable host verification:
+dev_appserver.py --host=0.0.0.0 --port=8080 --enable_host_checking=false app.yaml
 ```
 
-The server dynamically loads `app.yaml`, merges `env_variables.yaml` for configuration and environment variables, and starts the Go web service. Using `--host=0.0.0.0` makes the development server listen on all network interfaces rather than just localhost loopback.
+The server dynamically loads `app.yaml`, merges `env_variables.yaml` for environment configurations, and starts the Go web service. 
+- `--host=0.0.0.0` allows binding to all network interfaces for external reachability.
+- `--enable_host_checking=false` disables the host header validation check, preventing errors like `"Request Host 172.17.0.2 not whitelisted"`.
 
 ---
 
