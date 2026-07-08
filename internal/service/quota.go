@@ -173,9 +173,9 @@ func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse)
 	var timeSeries []*monitoringpb.TimeSeries
 
 	for name, details := range quota.Quota {
-		tsFrac := makeTimeSeries("custom.googleapis.com/quota/remaining_fraction", name, details.RemainingFraction, now)
-		tsInSecs := makeTimeSeries("custom.googleapis.com/quota/reset_in_seconds", name, details.ResetInSeconds, now)
-		tsTime := makeTimeSeries("custom.googleapis.com/quota/reset_time_epoch", name, details.ResetTime.Unix(), now)
+		tsFrac := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/remaining_fraction", name, details.RemainingFraction, now)
+		tsInSecs := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_in_seconds", name, details.ResetInSeconds, now)
+		tsTime := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_time_epoch", name, details.ResetTime.Unix(), now)
 		timeSeries = append(timeSeries, tsFrac, tsInSecs, tsTime)
 	}
 
@@ -241,7 +241,7 @@ func (s *quotaService) listMetric(ctx context.Context, metricType string) (map[s
 	return results, nil
 }
 
-func makeTimeSeries(metricType string, quotaName string, value interface{}, now time.Time) *monitoringpb.TimeSeries {
+func makeTimeSeries(projectID string, metricType string, quotaName string, value interface{}, now time.Time) *monitoringpb.TimeSeries {
 	var typedValue *monitoringpb.TypedValue
 	var valueType metric.MetricDescriptor_ValueType
 
@@ -271,6 +271,9 @@ func makeTimeSeries(metricType string, quotaName string, value interface{}, now 
 		},
 		Resource: &monitoredres.MonitoredResource{
 			Type: "global",
+			Labels: map[string]string{
+				"project_id": projectID,
+			},
 		},
 		MetricKind: metric.MetricDescriptor_GAUGE,
 		ValueType:  valueType,
