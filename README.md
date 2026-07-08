@@ -5,10 +5,10 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 ---
 
 ## Features
-- **Go 1.22 Runtime**: Developed using the Go standard library with zero third-party dependencies.
+- **Go 1.25 Runtime**: Developed with standard GCP Monitoring client integration.
 - **GAE Standard Ready**: Optimized for fast startup, automatic scaling, and configuration via `app.yaml`.
 - **API Key Authentication**: Protected by an `X-API-Key` header check.
-- **Thread-safe Store**: In-memory state tracking to persist and fetch submitted quota metrics.
+- **GCP Cloud Monitoring Integration**: Reports and retrieves quota metrics (remaining fraction, reset in seconds, reset time epoch) to Google Cloud Monitoring when the service is run with a configured Google Cloud project, falling back to a thread-safe in-memory store.
 
 ---
 
@@ -24,7 +24,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 │   ├── model/
 │   │   └── quota.go      # JSON schema structures
 │   └── service/
-│       └── quota.go      # Thread-safe in-memory store and retrieval logic
+│       └── quota.go      # GCP Monitoring reporting and retrieval with fallback store
 ├── app.yaml              # GAE deployment configuration
 ├── go.mod                # Go module definition
 └── README.md             # This file
