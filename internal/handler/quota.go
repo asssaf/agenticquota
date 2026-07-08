@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 
@@ -62,7 +63,7 @@ func (h *QuotaHandler) HandleQuota(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *QuotaHandler) getQuota(w http.ResponseWriter, r *http.Request) {
-	response, err := h.service.GetQuota()
+	response, err := h.service.GetQuota(r.Context())
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			w.WriteHeader(http.StatusNotFound)
@@ -71,6 +72,7 @@ func (h *QuotaHandler) getQuota(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		log.Printf("Error retrieving quota: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "failed to retrieve quota information",
@@ -94,7 +96,8 @@ func (h *QuotaHandler) postQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.SaveQuota(req); err != nil {
+	if err := h.service.SaveQuota(r.Context(), req); err != nil {
+		log.Printf("Error saving quota: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "failed to save quota data",

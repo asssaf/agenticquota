@@ -42,7 +42,7 @@ func TestQuotaService_GetAndSave(t *testing.T) {
 	svc := NewQuotaService()
 
 	// 1. Getting quota before any save should return ErrNotFound
-	_, err := svc.GetQuota()
+	_, err := svc.GetQuota(context.Background())
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got: %v", err)
 	}
@@ -57,13 +57,13 @@ func TestQuotaService_GetAndSave(t *testing.T) {
 			},
 		},
 	}
-	err = svc.SaveQuota(mockQuota)
+	err = svc.SaveQuota(context.Background(), mockQuota)
 	if err != nil {
 		t.Fatalf("unexpected error on save: %v", err)
 	}
 
 	// 3. Getting quota should now return the saved quota
-	res, err := svc.GetQuota()
+	res, err := svc.GetQuota(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error on get: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestQuotaService_GCP(t *testing.T) {
 	}
 
 	// 1. GetQuota when empty -> expect ErrNotFound
-	_, err := svc.GetQuota()
+	_, err := svc.GetQuota(context.Background())
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
@@ -109,7 +109,7 @@ func TestQuotaService_GCP(t *testing.T) {
 			},
 		},
 	}
-	err = svc.SaveQuota(payload)
+	err = svc.SaveQuota(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("SaveQuota failed: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestQuotaService_GCP(t *testing.T) {
 	}
 
 	// 3. GetQuota -> expect it to retrieve the saved data from mockCli
-	res, err := svc.GetQuota()
+	res, err := svc.GetQuota(context.Background())
 	if err != nil {
 		t.Fatalf("GetQuota failed: %v", err)
 	}
@@ -179,13 +179,13 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 			},
 		},
 	}
-	err := svc.SaveQuota(payload)
+	err := svc.SaveQuota(context.Background(), payload)
 	if err == nil || !strings.Contains(err.Error(), "monitoring create failed") {
 		t.Fatalf("expected create error, got %v", err)
 	}
 
 	// 2. GetQuota error
-	_, err = svc.GetQuota()
+	_, err = svc.GetQuota(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "monitoring list failed") {
 		t.Fatalf("expected list error, got %v", err)
 	}

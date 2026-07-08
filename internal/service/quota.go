@@ -25,8 +25,8 @@ var ErrNotFound = errors.New("no quota data found")
 
 // QuotaService provides operations on quotas.
 type QuotaService interface {
-	GetQuota() (model.QuotaResponse, error)
-	SaveQuota(quota model.QuotaResponse) error
+	GetQuota(ctx context.Context) (model.QuotaResponse, error)
+	SaveQuota(ctx context.Context, quota model.QuotaResponse) error
 }
 
 type gcpClient interface {
@@ -102,7 +102,7 @@ func NewQuotaService() QuotaService {
 }
 
 // GetQuota returns the last saved quota details.
-func (s *quotaService) GetQuota() (model.QuotaResponse, error) {
+func (s *quotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error) {
 	if !s.gcpEnabled {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
@@ -113,7 +113,6 @@ func (s *quotaService) GetQuota() (model.QuotaResponse, error) {
 		return s.lastQuota, nil
 	}
 
-	ctx := context.Background()
 	fractions, err := s.listMetric(ctx, "custom.googleapis.com/quota/remaining_fraction")
 	if err != nil {
 		return model.QuotaResponse{}, fmt.Errorf("failed to retrieve remaining fraction metric: %w", err)
@@ -160,7 +159,7 @@ func (s *quotaService) GetQuota() (model.QuotaResponse, error) {
 }
 
 // SaveQuota stores a new quota report.
-func (s *quotaService) SaveQuota(quota model.QuotaResponse) error {
+func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse) error {
 	if !s.gcpEnabled {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -170,7 +169,6 @@ func (s *quotaService) SaveQuota(quota model.QuotaResponse) error {
 		return nil
 	}
 
-	ctx := context.Background()
 	now := time.Now()
 	var timeSeries []*monitoringpb.TimeSeries
 
