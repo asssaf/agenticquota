@@ -47,3 +47,7 @@ echo "Google Cloud SDK and App Engine Go component installed!"
 echo "To use gcloud and dev_appserver.py, run:"
 echo "  export PATH=\"\$HOME/host-cache/gcloud/google-cloud-sdk/bin:\$PATH\""
 echo "--------------------------------------------------------"
+
+
+# Avoid "Compute Engine Metadata server unavailable"
+export GOOGLE_APPLICATION_CREDENTIALS=/dev/null
