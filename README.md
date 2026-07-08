@@ -107,6 +107,21 @@ Deploy the application to the App Engine standard environment using the Google C
 gcloud app deploy app.yaml --project YOUR_GCP_PROJECT_ID
 ```
 
+### GCP Prerequisites and Permissions
+
+To enable reporting and retrieving quota metrics via GCP Cloud Monitoring, make sure the following setup is configured on your Google Cloud Project:
+
+1. **Enable the Cloud Monitoring API**:
+   Enable the API via the Google Cloud Console or the `gcloud` CLI:
+   ```bash
+   gcloud services enable monitoring.googleapis.com --project YOUR_GCP_PROJECT_ID
+   ```
+
+2. **Configure IAM Permissions**:
+   The service account running your App Engine application (typically the default App Engine service account `YOUR_PROJECT_ID@appspot.gserviceaccount.com` or your configured runtime service account) must be granted the following IAM roles:
+   - **Monitoring Metric Writer** (`roles/monitoring.metricWriter`): Required to publish the custom metrics (via POST).
+   - **Monitoring Viewer** (`roles/monitoring.viewer`): Required to query and read back the metrics (via GET).
+
 ### Setting Environment Variables securely in GAE
 To supply the API key securely on GAE without checking secrets into version control:
 
