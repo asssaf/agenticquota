@@ -107,13 +107,24 @@ Deploy the application to the App Engine standard environment using the Google C
 gcloud app deploy app.yaml --project YOUR_GCP_PROJECT_ID
 ```
 
-### Setting Environment Variables in GAE
-To supply the API key securely on GAE, you can add environment variables inside your local `app.yaml` file (ensure this is not committed to public repositories):
+### Setting Environment Variables securely in GAE
+To supply the API key securely on GAE without checking secrets into version control:
 
-```yaml
-env_variables:
-  QUOTA_API_KEY: "your-secret-api-key"
-```
+1. Copy the template configuration file:
+   ```bash
+   cp env_variables.yaml.template env_variables.yaml
+   ```
+2. Open `env_variables.yaml` and set your desired `QUOTA_API_KEY`:
+   ```yaml
+   env_variables:
+     QUOTA_API_KEY: "your-actual-secret-key"
+   ```
+3. The `app.yaml` configuration is set up to automatically merge this file during deployment using the `includes:` directive:
+   ```yaml
+   includes:
+     - env_variables.yaml
+   ```
 
 > [!IMPORTANT]
-> To prevent leaking production API keys, avoid committing sensitive secrets to source control. Instead, use a secret manager or inject them during deployment pipelines.
+> `env_variables.yaml` is ignored by git (configured in `.gitignore`) to ensure your secrets are never committed to your repository.
+

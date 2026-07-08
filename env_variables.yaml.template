@@ -1,0 +1,6 @@
+# Template for App Engine environment variables.
+# Copy this file to "env_variables.yaml" and update the secret keys.
+# DO NOT commit "env_variables.yaml" to version control.
+
+env_variables:
+  QUOTA_API_KEY: "YOUR_SECRET_API_KEY_HERE"

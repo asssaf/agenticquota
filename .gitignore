@@ -1,0 +1,11 @@
+# App Engine secret environment variables
+env_variables.yaml
+
+# Local environment configuration
+.env
+
+# Go binaries and builds
+server
+*.exe
+*.test
+*.prof
