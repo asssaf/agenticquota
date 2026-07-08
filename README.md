@@ -132,8 +132,19 @@ To supply the API key securely on GAE without checking secrets into version cont
 
 ## Integration Testing with dev_appserver.py
 
-We provide a script to run integration tests using the App Engine Local Development Server (`dev_appserver.py`):
+### 1. Prerequisites (Local SDK Installation)
+If you do not have the Google Cloud SDK and App Engine component installed, run our helper installation script to download and install them under `~/host-cache/gcloud`:
 
+```bash
+./scripts/dev-setup.sh
+```
+
+Before running the tests, add the installed SDK binaries to your environment path:
+```bash
+export PATH="$HOME/host-cache/gcloud/google-cloud-sdk/bin:$PATH"
+```
+
+### 2. Run the integration tests:
 ```bash
 ./scripts/run_integration.sh
 ```
