@@ -67,6 +67,11 @@ type historicalRecord struct {
 	Quota     model.QuotaResponse
 }
 
+type cacheEntry struct {
+	data       interface{}
+	expiration time.Time
+}
+
 type quotaService struct {
 	mu         sync.RWMutex
 	lastQuota  model.QuotaResponse
@@ -76,6 +81,10 @@ type quotaService struct {
 	gcpEnabled bool
 	projectID  string
 	client     gcpClient
+
+	quotaCache        *cacheEntry
+	historyCache1Day  *cacheEntry
+	historyCache7Days *cacheEntry
 }
 
 // NewQuotaService creates a new instance of QuotaService.
@@ -127,6 +136,10 @@ func (s *quotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error
 		return s.lastQuota, nil
 	}
 
+	if cached, ok := s.getCachedQuota(); ok {
+		return cached, nil
+	}
+
 	fractions, err := s.listMetric(ctx, "custom.googleapis.com/quota/remaining_fraction")
 	if err != nil {
 		return model.QuotaResponse{}, fmt.Errorf("failed to retrieve remaining fraction metric: %w", err)
@@ -169,7 +182,10 @@ func (s *quotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error
 		}
 	}
 
-	return model.QuotaResponse{Quota: quotaMap}, nil
+	response := model.QuotaResponse{Quota: quotaMap}
+	s.setCachedQuota(response)
+
+	return response, nil
 }
 
 // SaveQuota stores a new quota report.
@@ -205,6 +221,8 @@ func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse)
 
 		return nil
 	}
+
+	s.invalidateCache()
 
 	now := time.Now()
 	var timeSeries []*monitoringpb.TimeSeries
@@ -348,13 +366,20 @@ func (s *quotaService) GetQuotaHistory(ctx context.Context, days int) (model.Quo
 		return model.QuotaHistoryResponse{History: historyMap}, nil
 	}
 
+	if cached, ok := s.getCachedHistory(days); ok {
+		return cached, nil
+	}
+
 	duration := time.Duration(days) * 24 * time.Hour
 	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction", duration)
 	if err != nil {
 		return model.QuotaHistoryResponse{}, fmt.Errorf("failed to retrieve historical remaining fraction: %w", err)
 	}
 
-	return model.QuotaHistoryResponse{History: fractions}, nil
+	response := model.QuotaHistoryResponse{History: fractions}
+	s.setCachedHistory(days, response)
+
+	return response, nil
 }
 
 func (s *quotaService) listTimeSeriesPoints(ctx context.Context, metricType string, duration time.Duration) (map[string][]model.HistoricalPoint, error) {
@@ -479,4 +504,62 @@ func (s *quotaService) seedFakeData() {
 			},
 		})
 	}
+}
+
+func (s *quotaService) getCachedQuota() (model.QuotaResponse, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.quotaCache != nil && time.Now().Before(s.quotaCache.expiration) {
+		return s.quotaCache.data.(model.QuotaResponse), true
+	}
+	return model.QuotaResponse{}, false
+}
+
+func (s *quotaService) setCachedQuota(response model.QuotaResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.quotaCache = &cacheEntry{
+		data:       response,
+		expiration: time.Now().Add(30 * time.Second),
+	}
+}
+
+func (s *quotaService) getCachedHistory(days int) (model.QuotaHistoryResponse, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if days == 1 && s.historyCache1Day != nil && time.Now().Before(s.historyCache1Day.expiration) {
+		return s.historyCache1Day.data.(model.QuotaHistoryResponse), true
+	}
+	if days == 7 && s.historyCache7Days != nil && time.Now().Before(s.historyCache7Days.expiration) {
+		return s.historyCache7Days.data.(model.QuotaHistoryResponse), true
+	}
+	return model.QuotaHistoryResponse{}, false
+}
+
+func (s *quotaService) setCachedHistory(days int, response model.QuotaHistoryResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry := &cacheEntry{
+		data:       response,
+		expiration: time.Now().Add(30 * time.Second),
+	}
+
+	if days == 1 {
+		s.historyCache1Day = entry
+	} else if days == 7 {
+		s.historyCache7Days = entry
+	}
+}
+
+func (s *quotaService) invalidateCache() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.quotaCache = nil
+	s.historyCache1Day = nil
+	s.historyCache7Days = nil
 }
