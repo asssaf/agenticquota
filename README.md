@@ -36,7 +36,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 ## Local Development & Testing
 
 ### 1. Prerequisites
-- [Go 1.22+](https://go.dev/doc/install) installed locally.
+- [Go 1.25+](https://go.dev/doc/install) installed locally.
 
 ### 2. Run the Server
 Set the API key environment variable and start the application:
