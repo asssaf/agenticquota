@@ -27,7 +27,7 @@ var ErrNotFound = errors.New("no quota data found")
 // QuotaService provides operations on quotas.
 type QuotaService interface {
 	GetQuota(ctx context.Context) (model.QuotaResponse, error)
-	GetQuotaHistory(ctx context.Context) (model.QuotaHistoryResponse, error)
+	GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error)
 	SaveQuota(ctx context.Context, quota model.QuotaResponse) error
 }
 
@@ -181,14 +181,14 @@ func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse)
 			Quota:     quota,
 		})
 
-		// Limit in-memory history size to prevent memory exhaustion
-		const maxHistory = 500
+		// Limit in-memory history size to prevent memory exhaustion (up to 7 days)
+		const maxHistory = 3000
 		if len(s.history) > maxHistory {
 			s.history = s.history[len(s.history)-maxHistory:]
 		}
 
-		// Prune records older than 24 hours
-		cutoff := time.Now().Add(-24 * time.Hour)
+		// Prune records older than 7 days
+		cutoff := time.Now().Add(-7 * 24 * time.Hour)
 		idx := 0
 		for idx < len(s.history) && s.history[idx].Timestamp.Before(cutoff) {
 			idx++
@@ -320,14 +320,18 @@ func makeTimeSeries(projectID string, metricType string, quotaName string, value
 	}
 }
 
-// GetQuotaHistory retrieves the 24-hour historical utilization series for all quotas.
-func (s *quotaService) GetQuotaHistory(ctx context.Context) (model.QuotaHistoryResponse, error) {
+// GetQuotaHistory retrieves the 24-hour or 7-day historical utilization series for all quotas.
+func (s *quotaService) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error) {
 	if !s.gcpEnabled {
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 
+		cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 		historyMap := make(map[string][]model.HistoricalPoint)
 		for _, record := range s.history {
+			if record.Timestamp.Before(cutoff) {
+				continue
+			}
 			for name, details := range record.Quota.Quota {
 				historyMap[name] = append(historyMap[name], model.HistoricalPoint{
 					Timestamp: record.Timestamp,
@@ -338,7 +342,8 @@ func (s *quotaService) GetQuotaHistory(ctx context.Context) (model.QuotaHistoryR
 		return model.QuotaHistoryResponse{History: historyMap}, nil
 	}
 
-	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction")
+	duration := time.Duration(days) * 24 * time.Hour
+	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction", duration)
 	if err != nil {
 		return model.QuotaHistoryResponse{}, fmt.Errorf("failed to retrieve historical remaining fraction: %w", err)
 	}
@@ -346,9 +351,9 @@ func (s *quotaService) GetQuotaHistory(ctx context.Context) (model.QuotaHistoryR
 	return model.QuotaHistoryResponse{History: fractions}, nil
 }
 
-func (s *quotaService) listTimeSeriesPoints(ctx context.Context, metricType string) (map[string][]model.HistoricalPoint, error) {
+func (s *quotaService) listTimeSeriesPoints(ctx context.Context, metricType string, duration time.Duration) (map[string][]model.HistoricalPoint, error) {
 	now := time.Now()
-	startTime := now.Add(-24 * time.Hour)
+	startTime := now.Add(-duration)
 
 	req := &monitoringpb.ListTimeSeriesRequest{
 		Name:   "projects/" + s.projectID,

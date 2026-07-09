@@ -157,3 +157,79 @@ func TestQuotaHandler_GetQuota_DefaultKeyFallback(t *testing.T) {
 		t.Errorf("expected fallback authentication success followed by status 404, got: %d", rrSuccess.Code)
 	}
 }
+
+func TestQuotaHandler_GetQuotaHistory_Success(t *testing.T) {
+	t.Setenv("QUOTA_API_KEY", "testkey")
+	svc := service.NewQuotaService()
+	h := NewQuotaHandler(svc)
+
+	// 1. Post a quota payload to populate history
+	payload := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.9,
+				ResetTime:         time.Now().Add(2 * time.Hour),
+				ResetInSeconds:    7200,
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqPost, err := http.NewRequest("POST", "/api/v1/quota", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqPost.Header.Set("X-API-Key", "testkey")
+	reqPost.Header.Set("Content-Type", "application/json")
+
+	rrPost := httptest.NewRecorder()
+	h.HandleQuota(rrPost, reqPost)
+
+	if rrPost.Code != http.StatusOK {
+		t.Errorf("expected POST status 200 OK, got: %d", rrPost.Code)
+	}
+
+	// 2. Fetch history with default timeframe (days=1)
+	reqGet1, err := http.NewRequest("GET", "/api/v1/quota/history?days=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqGet1.Header.Set("X-API-Key", "testkey")
+
+	rrGet1 := httptest.NewRecorder()
+	h.HandleQuotaHistory(rrGet1, reqGet1)
+
+	if rrGet1.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK for history (days=1), got: %d", rrGet1.Code)
+	}
+
+	var resp1 model.QuotaHistoryResponse
+	if err := json.NewDecoder(rrGet1.Body).Decode(&resp1); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+
+	points1, ok := resp1.History["3p-5h"]
+	if !ok || len(points1) == 0 {
+		t.Fatal("expected history data for key '3p-5h'")
+	}
+	if points1[0].Value != 0.9 {
+		t.Errorf("expected value 0.9, got: %f", points1[0].Value)
+	}
+
+	// 3. Fetch history with 7-day timeframe (days=7)
+	reqGet7, err := http.NewRequest("GET", "/api/v1/quota/history?days=7", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqGet7.Header.Set("X-API-Key", "testkey")
+
+	rrGet7 := httptest.NewRecorder()
+	h.HandleQuotaHistory(rrGet7, reqGet7)
+
+	if rrGet7.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK for history (days=7), got: %d", rrGet7.Code)
+	}
+}

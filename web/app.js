@@ -4,6 +4,7 @@ let state = {
     quotas: {},
     history: {},
     activeTab: 'active', // 'active' or 'history'
+    selectedDays: 1, // timeframe selection: 1 or 7 days
     toggledOffQuotas: new Set(),
     autoRefreshInterval: parseInt(localStorage.getItem('agentic_quota_refresh') || '30'),
     activeTimers: [],
@@ -36,6 +37,7 @@ const elements = {
     viewActive: document.getElementById('view-active'),
     viewHistory: document.getElementById('view-history'),
     chartLegend: document.getElementById('chart-legend'),
+    timeframeToggle: document.getElementById('timeframe-toggle'),
     chartLoading: document.getElementById('chart-loading'),
     chartEmpty: document.getElementById('chart-empty'),
     chartContainer: document.getElementById('chart-container')
@@ -99,6 +101,23 @@ function setupEventListeners() {
     // Tab switching
     elements.tabActive.addEventListener('click', () => switchTab('active'));
     elements.tabHistory.addEventListener('click', () => switchTab('history'));
+    
+    // Timeframe toggle buttons
+    if (elements.timeframeToggle) {
+        const tfButtons = elements.timeframeToggle.querySelectorAll('.time-toggle-btn');
+        tfButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const days = parseInt(btn.getAttribute('data-days'));
+                if (state.selectedDays === days) return;
+                
+                tfButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                state.selectedDays = days;
+                fetchHistoryData();
+            });
+        });
+    }
     
     elements.settingsForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -272,7 +291,7 @@ async function fetchHistoryData(isManual = false) {
     }
     
     try {
-        const response = await fetch('/api/v1/quota/history', {
+        const response = await fetch(`/api/v1/quota/history?days=${state.selectedDays}`, {
             method: 'GET',
             headers: {
                 'X-API-Key': state.apiKey,
@@ -457,15 +476,9 @@ function drawHistoryChart() {
     elements.chartContainer.classList.remove('hidden');
     elements.chartContainer.innerHTML = ''; // Clear previous SVG
     
-    allPoints.sort((a, b) => a.timestamp - b.timestamp);
-    let tMin = allPoints[0].timestamp;
-    let tMax = allPoints[allPoints.length - 1].timestamp;
-    
-    // If only one data point exists, expand boundaries
-    if (tMin === tMax) {
-        tMin -= 3600 * 1000; // -1h
-        tMax += 3600 * 1000; // +1h
-    }
+    // Set stable boundaries based on the selected timeframe range (24h or 7d)
+    const tMax = Date.now();
+    const tMin = tMax - (state.selectedDays * 24 * 60 * 60 * 1000);
     
     const chartWidth = CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right;
     const chartHeight = CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom;
@@ -671,7 +684,7 @@ function drawHistoryChart() {
             return;
         }
         
-        // Alight crosshair tracker to closest matching point's time coordinate
+        // Align crosshair tracker to closest matching point's time coordinate
         hoverPoints.sort((a, b) => a.dist - b.dist);
         const bestPtX = hoverPoints[0].pt.x;
         const bestPtTime = hoverPoints[0].pt.timestamp;
@@ -757,6 +770,9 @@ function formatTimestamp(isoString) {
 
 function formatTickTime(timestampMs) {
     const d = new Date(timestampMs);
+    if (state.selectedDays === 7) {
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
     return `${h}:${m}`;
@@ -780,6 +796,7 @@ function startCountdownTicks() {
     }, 1000);
 }
 
+// Countdown handler
 function tickCountdowns() {
     if (state.activeTimers.length === 0) return;
     

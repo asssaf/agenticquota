@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"agenticquota/internal/model"
 	"agenticquota/internal/service"
@@ -124,7 +125,15 @@ func (h *QuotaHandler) HandleQuotaHistory(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response, err := h.service.GetQuotaHistory(r.Context())
+	days := 1
+	daysStr := r.URL.Query().Get("days")
+	if daysStr != "" {
+		if val, err := strconv.Atoi(daysStr); err == nil && (val == 1 || val == 7) {
+			days = val
+		}
+	}
+
+	response, err := h.service.GetQuotaHistory(r.Context(), days)
 	if err != nil {
 		log.Printf("Error retrieving quota history: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)

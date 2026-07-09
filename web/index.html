@@ -84,7 +84,13 @@
         <section id="view-history" class="view-section hidden">
             <div class="history-view-card">
                 <div class="history-view-header">
-                    <h2>Utilization History (24h)</h2>
+                    <div class="history-title-group">
+                        <h2>Utilization History</h2>
+                        <div class="timeframe-toggle" id="timeframe-toggle">
+                            <button class="time-toggle-btn active" data-days="1" id="btn-tf-24h">24h</button>
+                            <button class="time-toggle-btn" data-days="7" id="btn-tf-7d">7d</button>
+                        </div>
+                    </div>
                     <div id="chart-legend" class="chart-legend-container">
                         <!-- Populated dynamically -->
                     </div>

@@ -864,6 +864,43 @@ body {
     display: inline-block;
 }
 
+.history-title-group {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.timeframe-toggle {
+    display: flex;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    padding: 0.2rem;
+    border-radius: 8px;
+}
+
+.time-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.time-toggle-btn:hover {
+    color: var(--text-primary);
+}
+
+.time-toggle-btn.active {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
 /* Chart Canvas Area */
 .chart-content {
     background: rgba(0, 0, 0, 0.2);
@@ -918,11 +955,9 @@ body {
 
 .chart-line-path {
     fill: none;
-    stroke: var(--color-safe);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 4px 10px rgba(0, 242, 254, 0.4));
 }
 
 .chart-area-path {
@@ -932,7 +967,6 @@ body {
 
 .chart-data-point {
     fill: #141124;
-    stroke: var(--color-safe);
     stroke-width: 3;
     cursor: pointer;
     transition: r 0.15s ease-in-out;
