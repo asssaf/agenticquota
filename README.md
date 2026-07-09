@@ -193,4 +193,59 @@ This script:
 4. Executes curl integration calls verifying API authentication, GET behavior when empty (404), POST behavior (200), and GET matching of posted payloads.
 5. Shuts down the background dev server cleanly upon completion or error.
 
+---
+
+## Integration with antigravity-cli Custom Statusline
+
+You can automatically export your CLI's real-time quota metrics to the **agenticquota** service using a custom status line script in the **Antigravity CLI** (`agy`). Whenever the agent state changes, the CLI runs your custom script and pipes agent telemetry (including the active model and quota information) as a JSON payload to `stdin`. 
+
+Your script can extract this quota information, POST it to the **agenticquota** service in the background (which forwards it to Google Cloud Monitoring if configured), and print a formatted status line to `stdout` instantly.
+
+### 1. Enable Custom Statusline in Settings
+
+Open your `antigravity-cli` settings file:
+- **Linux/macOS**: `~/.gemini/antigravity-cli/settings.json`
+- **Windows**: `%USERPROFILE%\.gemini\antigravity-cli\settings.json`
+
+Add or update the `statusLine` configuration to run a custom command:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/path/to/your/statusline.sh",
+    "enabled": true
+  }
+}
+```
+
+### 2. Create the Statusline Script (`statusline.sh`)
+
+Create a script (e.g., at `/path/to/your/statusline.sh`) with the following contents, making sure to make it executable (`chmod +x statusline.sh`):
+
+```bash
+#!/bin/bash
+# Read telemetry JSON from stdin provided by antigravity-cli
+TELEMETRY=$(cat)
+
+# Define your agenticquota service configuration
+QUOTA_URL="http://localhost:8080/api/v1/quota"
+API_KEY="your-secret-api-key"
+
+# 1. POST the quota information to the agenticquota service in the background.
+# We wrap the .quota field inside a {"quota": ...} object as expected by the API.
+echo "$TELEMETRY" | jq '{"quota": .quota}' | curl -s -X POST \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @- \
+  "$QUOTA_URL" >/dev/null 2>&1 &
+
+# 2. Render your custom status line here
+# Extract details from the stdin telemetry JSON and print your desired status bar content to stdout.
+MODEL=$(echo "$TELEMETRY" | jq -r '.active_model // "Gemini"')
+echo "Model: $MODEL | [Your Custom Status Line Here]"
+```
+
+Make sure `jq` is installed on your system. This script processes the incoming JSON telemetry stream, publishes the metrics to your `agenticquota` service asynchronously so as not to block CLI TUI rendering, and outputs a clean status bar message.
+
 
