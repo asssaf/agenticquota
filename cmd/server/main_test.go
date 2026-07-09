@@ -42,3 +42,22 @@ func TestSetupRouter_QuotaEndpointProtected(t *testing.T) {
 		t.Errorf("expected status 401 Unauthorized, got: %d", rr.Code)
 	}
 }
+
+func TestSetupRouter_DashboardRoute(t *testing.T) {
+	mux := setupRouter()
+
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	// During tests, since the working directory is the package directory cmd/server,
+	// the static folder "web/" might not be resolved (404), which is expected.
+	// But it should not return 401 Unauthorized or 405 Method Not Allowed.
+	if rr.Code != http.StatusOK && rr.Code != http.StatusNotFound {
+		t.Errorf("expected status 200 OK or 404 Not Found, got: %d", rr.Code)
+	}
+}

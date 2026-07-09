@@ -9,6 +9,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 - **GAE Standard Ready**: Optimized for fast startup, automatic scaling, and configuration via `app.yaml`.
 - **API Key Authentication**: Protected by an `X-API-Key` header check.
 - **GCP Cloud Monitoring Integration**: Reports and retrieves quota metrics (remaining fraction, reset in seconds, reset time epoch) to Google Cloud Monitoring when the service is run with a configured Google Cloud project, falling back to a thread-safe in-memory store.
+- **Interactive Quota Dashboard**: A premium, lightweight web interface served at `/` featuring live countdowns, circular status gauges, and local settings memory.
 
 ---
 
@@ -248,4 +249,19 @@ echo "Model: $MODEL | [Your Custom Status Line Here]"
 
 Make sure `jq` is installed on your system. This script processes the incoming JSON telemetry stream, publishes the metrics to your `agenticquota` service asynchronously so as not to block CLI TUI rendering, and outputs a clean status bar message.
 
+---
 
+## Quota Dashboard
+
+The service includes a built-in, lightweight web dashboard to monitor your quotas visually.
+
+### Accessing the Dashboard
+- **Local Development**: Open `http://localhost:8080/` in your browser.
+- **App Engine Production**: Access the root URL of your GAE deployment (e.g. `https://your-project.appspot.com/`).
+
+### Design & Architecture
+- **Direct GAE Frontend Delivery**: On Google App Engine, static files for the dashboard (`index.html`, `style.css`, `app.js`) are served directly via Google's CDN layers using custom `static_files` handlers in `app.yaml`, bypassing your Go instance to maximize performance and minimize GAE costs.
+- **Local Fallback**: When running directly using `go run cmd/server/main.go`, the Go router serves the dashboard using `http.FileServer` from the local `web/` directory.
+- **Frosted Glass (Glassmorphism)**: Uses an ultra-modern dark gradient interface with translucent glass panels, status-based neon glowing highlights, and responsive layouts.
+- **Secure Client-Side Auth**: The dashboard prompts you for your `X-API-Key` and saves it securely in your browser's `localStorage` (optional). All requests to the API are made client-side using this key.
+- **Real-time Countdowns**: The dashboard counts down to the quota reset time in real-time, auto-refreshing when a quota resets or at your chosen refresh interval (10s, 30s, 60s).

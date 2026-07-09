@@ -25,6 +25,9 @@ func setupRouter() *http.ServeMux {
 		w.Write([]byte("ok"))
 	})
 
+	// Serve static files for the dashboard from the local web directory (for local dev)
+	mux.Handle("/", http.FileServer(http.Dir("web")))
+
 	return mux
 }
 

@@ -11,6 +11,21 @@ includes:
   - env_variables.yaml
 
 handlers:
+- url: /style.css
+  static_files: web/style.css
+  upload: web/style.css
+  secure: always
+
+- url: /app.js
+  static_files: web/app.js
+  upload: web/app.js
+  secure: always
+
+- url: /$
+  static_files: web/index.html
+  upload: web/index.html
+  secure: always
+
 - url: /.*
   script: auto
   secure: always
