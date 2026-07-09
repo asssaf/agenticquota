@@ -605,7 +605,7 @@ function drawHistoryChart() {
             const circle = document.createElementNS(svgNamespace, "circle");
             circle.setAttribute("cx", pt.x);
             circle.setAttribute("cy", pt.y);
-            circle.setAttribute("r", "3.5");
+            circle.setAttribute("r", "2.2");
             circle.setAttribute("class", "chart-data-point");
             circle.setAttribute("stroke", color);
             svg.appendChild(circle);

@@ -944,13 +944,13 @@ body {
 
 .chart-data-point {
     fill: #141124;
-    stroke-width: 3;
+    stroke-width: 1.5;
     cursor: pointer;
     transition: r 0.15s ease-in-out;
 }
 
 .chart-data-point:hover {
-    r: 7;
+    r: 4;
 }
 
 /* Loader & Empty states inside chart card */
