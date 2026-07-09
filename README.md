@@ -253,6 +253,11 @@ Make sure `jq` is installed on your system. This script processes the incoming J
 
 ## Quota Dashboard
 
+<p float="left">
+  <img width="500" alt="overview" src="https://github.com/user-attachments/assets/0a90325d-2505-4f81-a33f-4d0755538762" />
+  <img width="500"  alt="history" src="https://github.com/user-attachments/assets/6e329fae-8270-4fcb-8d3b-d94eb102d4fa" />
+</p>
+
 The service includes a built-in, lightweight web dashboard to monitor your quotas visually.
 
 ### Accessing the Dashboard
