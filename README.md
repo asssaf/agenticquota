@@ -8,7 +8,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 - **Go 1.25 Runtime**: Developed with standard GCP Monitoring client integration.
 - **GAE Standard Ready**: Optimized for fast startup, automatic scaling, and configuration via `app.yaml`.
 - **API Key Authentication**: Protected by an `X-API-Key` header check.
-- **GCP Cloud Monitoring Integration**: Reports and retrieves quota metrics (remaining fraction, reset in seconds, reset time epoch) to Google Cloud Monitoring when the service is run with a configured Google Cloud project, falling back to a thread-safe in-memory store.
+- **GCP Cloud Monitoring Integration**: Reports and retrieves quota metrics (remaining fraction, reset in seconds, reset time epoch) to Google Cloud Monitoring when the service is run with a configured Google Cloud project, falling back to a thread-safe in-memory store. Read queries are optimized with a short-term (30s) in-memory cache to prevent exceeding API free tier limits, with immediate invalidation on new writes.
 - **Interactive Quota Dashboard**: A premium, lightweight web interface served at `/` featuring live countdowns, circular status gauges, and local settings memory.
 
 ---
