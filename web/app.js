@@ -734,20 +734,42 @@ function drawHistoryChart() {
             `;
         });
         
-        const tooltipLeft = (bestPtX / CHART_WIDTH) * rect.width;
-        const avgY = hoverPoints.reduce((acc, curr) => acc + curr.pt.y, 0) / hoverPoints.length;
-        const tooltipTop = (avgY / CHART_HEIGHT) * rect.height;
+        const containerRect = elements.chartContainer.getBoundingClientRect();
+        const pointClientX = rect.left + (bestPtX / CHART_WIDTH) * rect.width;
+        const tooltipLeft = pointClientX - containerRect.left;
         
-        tooltip.style.left = `${tooltipLeft + 15}px`;
-        tooltip.style.top = `${tooltipTop - 50}px`;
-        tooltip.style.borderColor = "rgba(255, 255, 255, 0.15)";
-        tooltip.style.opacity = "1";
-        tooltip.style.transform = "translateY(0)";
+        const avgY = hoverPoints.reduce((acc, curr) => acc + curr.pt.y, 0) / hoverPoints.length;
+        const pointClientY = rect.top + (avgY / CHART_HEIGHT) * rect.height;
+        const tooltipTop = pointClientY - containerRect.top;
         
         tooltip.innerHTML = `
             <div class="chart-tooltip-time">${formatTooltipTime(bestPtTime)}</div>
             ${tooltipValuesHTML}
         `;
+        
+        const tooltipWidth = tooltip.offsetWidth || 150;
+        const tooltipHeight = tooltip.offsetHeight || 80;
+        
+        let leftPosition = tooltipLeft + 15;
+        // Flip to the left side if the tooltip would overflow the right edge of the container
+        if (leftPosition + tooltipWidth > containerRect.width - 10) {
+            leftPosition = tooltipLeft - tooltipWidth - 15;
+            if (leftPosition < 10) {
+                leftPosition = 10;
+            }
+        }
+        
+        let topPosition = tooltipTop - tooltipHeight - 10;
+        // Flip to the bottom if the tooltip would overflow the top edge of the container
+        if (topPosition < 10) {
+            topPosition = tooltipTop + 15;
+        }
+        
+        tooltip.style.left = `${leftPosition}px`;
+        tooltip.style.top = `${topPosition}px`;
+        tooltip.style.borderColor = "rgba(255, 255, 255, 0.15)";
+        tooltip.style.opacity = "1";
+        tooltip.style.transform = "translateY(0)";
     });
     
     svg.addEventListener('mouseleave', hideTracker);
