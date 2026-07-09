@@ -824,36 +824,44 @@ body {
     font-weight: 700;
 }
 
-.selector-group {
+.chart-legend-container {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.9rem;
-    color: var(--text-secondary);
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.dropdown-control {
-    background: rgba(0, 0, 0, 0.3);
+.legend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
     border-radius: 8px;
-    color: var(--text-primary);
-    padding: 0.5rem 1rem;
-    font-family: var(--font-body);
-    font-size: 0.875rem;
-    min-width: 180px;
+    font-size: 0.8rem;
+    font-weight: 550;
+    color: var(--text-secondary);
     cursor: pointer;
+    user-select: none;
     transition: all var(--transition-fast);
 }
 
-.dropdown-control:focus {
-    outline: none;
-    border-color: var(--color-safe);
-    box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+.legend-badge:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    border-color: var(--border-hover);
 }
 
-.dropdown-control option {
-    background: #141124;
-    color: var(--text-primary);
+.legend-badge.disabled {
+    opacity: 0.35;
+    text-decoration: line-through;
+}
+
+.legend-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
 }
 
 /* Chart Canvas Area */

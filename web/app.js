@@ -1,10 +1,10 @@
 // State Management
 let state = {
-    apiKey: localStorage.getItem('agent_quota_api_key') || '',
+    apiKey: localStorage.getItem('agentic_quota_api_key') || '',
     quotas: {},
     history: {},
     activeTab: 'active', // 'active' or 'history'
-    selectedQuotaHistory: '',
+    toggledOffQuotas: new Set(),
     autoRefreshInterval: parseInt(localStorage.getItem('agentic_quota_refresh') || '30'),
     activeTimers: [],
     refreshTimerId: null,
@@ -35,7 +35,7 @@ const elements = {
     tabHistory: document.getElementById('tab-history'),
     viewActive: document.getElementById('view-active'),
     viewHistory: document.getElementById('view-history'),
-    quotaSelect: document.getElementById('quota-select'),
+    chartLegend: document.getElementById('chart-legend'),
     chartLoading: document.getElementById('chart-loading'),
     chartEmpty: document.getElementById('chart-empty'),
     chartContainer: document.getElementById('chart-container')
@@ -49,6 +49,13 @@ const SVG_CIRCUMFERENCE = 2 * Math.PI * SVG_RADIUS; // ~314.16
 const CHART_WIDTH = 800;
 const CHART_HEIGHT = 380;
 const CHART_MARGIN = { top: 40, right: 40, bottom: 50, left: 60 };
+
+// Neon Color Palette for multiple graph lines
+const PALETTE = ['#00f2fe', '#ff007f', '#39ff14', '#f1c40f', '#9b59b6', '#e67e22'];
+
+function getQuotaColor(name, index) {
+    return PALETTE[index % PALETTE.length];
+}
 
 // Initialize Application
 function init() {
@@ -92,12 +99,6 @@ function setupEventListeners() {
     // Tab switching
     elements.tabActive.addEventListener('click', () => switchTab('active'));
     elements.tabHistory.addEventListener('click', () => switchTab('history'));
-    
-    // Dropdown change for quota selection in history tab
-    elements.quotaSelect.addEventListener('change', (e) => {
-        state.selectedQuotaHistory = e.target.value;
-        drawHistoryChart();
-    });
     
     elements.settingsForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -284,7 +285,7 @@ async function fetchHistoryData(isManual = false) {
             hideBanner();
             updateConnectionStatus('connected', 'Connected');
             state.history = data.history || {};
-            populateQuotaDropdown();
+            renderLegend();
             drawHistoryChart();
         } else if (response.status === 401) {
             updateConnectionStatus('unauthorized', 'Unauthorized');
@@ -382,40 +383,71 @@ function processQuotaData(quotaMap) {
     tickCountdowns();
 }
 
-// Populate history dropdown list
-function populateQuotaDropdown() {
+// Render dynamic interactive Legend
+function renderLegend() {
     const keys = Object.keys(state.history).sort();
-    
     if (keys.length === 0) {
-        elements.quotaSelect.innerHTML = '<option value="">No active quotas</option>';
-        state.selectedQuotaHistory = '';
+        elements.chartLegend.innerHTML = '';
         return;
     }
     
-    let options = '';
-    keys.forEach(key => {
-        const isSelected = key === state.selectedQuotaHistory ? 'selected' : '';
-        options += `<option value="${key}" ${isSelected}>${key}</option>`;
+    let html = '';
+    keys.forEach((name, idx) => {
+        const color = getQuotaColor(name, idx);
+        const isDisabled = state.toggledOffQuotas.has(name) ? 'disabled' : '';
+        html += `
+            <div class="legend-badge ${isDisabled}" data-quota-name="${name}">
+                <span class="legend-color-dot" style="background: ${color}"></span>
+                <span>${name}</span>
+            </div>
+        `;
     });
-    elements.quotaSelect.innerHTML = options;
+    elements.chartLegend.innerHTML = html;
     
-    if (!state.selectedQuotaHistory || !keys.includes(state.selectedQuotaHistory)) {
-        state.selectedQuotaHistory = keys[0];
-    }
+    // Add event listeners to badge items for toggling lines
+    elements.chartLegend.querySelectorAll('.legend-badge').forEach(badge => {
+        badge.addEventListener('click', () => {
+            const name = badge.getAttribute('data-quota-name');
+            if (state.toggledOffQuotas.has(name)) {
+                state.toggledOffQuotas.delete(name);
+            } else {
+                // Ensure at least one line remains visible
+                const enabledCount = keys.length - state.toggledOffQuotas.size;
+                if (enabledCount > 1) {
+                    state.toggledOffQuotas.add(name);
+                }
+            }
+            renderLegend();
+            drawHistoryChart();
+        });
+    });
 }
 
-// Render dynamic SVG graph
+// Render multi-series SVG graph
 function drawHistoryChart() {
-    const name = state.selectedQuotaHistory;
-    if (!name) {
+    const activeSeriesNames = Object.keys(state.history)
+        .filter(name => !state.toggledOffQuotas.has(name))
+        .sort();
+        
+    if (activeSeriesNames.length === 0) {
         elements.chartEmpty.classList.remove('hidden');
         elements.chartContainer.classList.add('hidden');
         return;
     }
     
-    const points = state.history[name] || [];
+    // Collect all data points from active series to establish boundaries
+    let allPoints = [];
+    activeSeriesNames.forEach(name => {
+        const pts = state.history[name] || [];
+        pts.forEach(pt => {
+            allPoints.push({
+                timestamp: new Date(pt.timestamp).getTime(),
+                value: pt.value
+            });
+        });
+    });
     
-    if (points.length === 0) {
+    if (allPoints.length === 0) {
         elements.chartEmpty.classList.remove('hidden');
         elements.chartContainer.classList.add('hidden');
         return;
@@ -425,17 +457,11 @@ function drawHistoryChart() {
     elements.chartContainer.classList.remove('hidden');
     elements.chartContainer.innerHTML = ''; // Clear previous SVG
     
-    // Parse timestamps
-    const data = points.map(pt => ({
-        timestamp: new Date(pt.timestamp).getTime(),
-        value: pt.value
-    })).sort((a, b) => a.timestamp - b.timestamp);
+    allPoints.sort((a, b) => a.timestamp - b.timestamp);
+    let tMin = allPoints[0].timestamp;
+    let tMax = allPoints[allPoints.length - 1].timestamp;
     
-    // Calculate Bounds
-    let tMin = data[0].timestamp;
-    let tMax = data[data.length - 1].timestamp;
-    
-    // If only one data point exists, expand horizontal boundary to prevent division by zero
+    // If only one data point exists, expand boundaries
     if (tMin === tMax) {
         tMin -= 3600 * 1000; // -1h
         tMax += 3600 * 1000; // +1h
@@ -444,50 +470,13 @@ function drawHistoryChart() {
     const chartWidth = CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right;
     const chartHeight = CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom;
     
-    // Map timestamps and values into SVG coordinate space
-    const projectedPoints = data.map(pt => {
-        const x = CHART_MARGIN.left + ((pt.timestamp - tMin) / (tMax - tMin)) * chartWidth;
-        const y = CHART_MARGIN.top + (1 - pt.value) * chartHeight; // inverted because 0 is at top
-        return { x, y, timestamp: pt.timestamp, value: pt.value };
-    });
-    
-    // Identify state-specific color mapping based on latest value
-    const latestVal = data[data.length - 1].value;
-    const currentStatus = getQuotaState(latestVal);
-    const accentColor = getStatusRGBHex(currentStatus);
-    
-    // Start generating SVG elements
     const svgNamespace = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNamespace, "svg");
     svg.setAttribute("viewBox", `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`);
     svg.setAttribute("class", "chart-svg");
     
-    // 1. Defs for area gradients and drop shadow glows
+    // Defs for glowing filter
     const defs = document.createElementNS(svgNamespace, "defs");
-    
-    // Area gradient
-    const gradient = document.createElementNS(svgNamespace, "linearGradient");
-    gradient.setAttribute("id", "chart-gradient");
-    gradient.setAttribute("x1", "0");
-    gradient.setAttribute("y1", "0");
-    gradient.setAttribute("x2", "0");
-    gradient.setAttribute("y2", "1");
-    
-    const stop0 = document.createElementNS(svgNamespace, "stop");
-    stop0.setAttribute("offset", "0%");
-    stop0.setAttribute("stop-color", accentColor);
-    stop0.setAttribute("stop-opacity", "0.22");
-    
-    const stop100 = document.createElementNS(svgNamespace, "stop");
-    stop100.setAttribute("offset", "100%");
-    stop100.setAttribute("stop-color", accentColor);
-    stop100.setAttribute("stop-opacity", "0.0");
-    
-    gradient.appendChild(stop0);
-    gradient.appendChild(stop100);
-    defs.appendChild(gradient);
-    
-    // Neon glow filter
     const filter = document.createElementNS(svgNamespace, "filter");
     filter.setAttribute("id", "chart-glow");
     filter.setAttribute("x", "-10%");
@@ -496,7 +485,7 @@ function drawHistoryChart() {
     filter.setAttribute("height", "120%");
     
     const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
-    blur.setAttribute("stdDeviation", "4");
+    blur.setAttribute("stdDeviation", "3");
     blur.setAttribute("result", "blur");
     
     const merge = document.createElementNS(svgNamespace, "feMerge");
@@ -512,7 +501,7 @@ function drawHistoryChart() {
     defs.appendChild(filter);
     svg.appendChild(defs);
     
-    // 2. Draw horizontal grid lines and Y-axis text labels (0%, 25%, 50%, 75%, 100%)
+    // 1. Draw horizontal grid lines and Y-axis labels
     const yGridValues = [0, 0.25, 0.5, 0.75, 1];
     yGridValues.forEach(val => {
         const y = CHART_MARGIN.top + (1 - val) * chartHeight;
@@ -526,7 +515,7 @@ function drawHistoryChart() {
         gridLine.setAttribute("class", "chart-grid-line");
         svg.appendChild(gridLine);
         
-        // Y-axis label text
+        // Label
         const text = document.createElementNS(svgNamespace, "text");
         text.setAttribute("x", CHART_MARGIN.left - 10);
         text.setAttribute("y", y + 4);
@@ -535,14 +524,13 @@ function drawHistoryChart() {
         svg.appendChild(text);
     });
     
-    // 3. Draw vertical grid lines and X-axis text labels (5 time marks)
+    // 2. Draw vertical time grid lines and X-axis labels
     const numTicks = 5;
     for (let i = 0; i < numTicks; i++) {
         const ratio = i / (numTicks - 1);
         const t = tMin + ratio * (tMax - tMin);
         const x = CHART_MARGIN.left + ratio * chartWidth;
         
-        // Vertical axis tick mark (subtle dashed line)
         if (i > 0 && i < numTicks - 1) {
             const vLine = document.createElementNS(svgNamespace, "line");
             vLine.setAttribute("x1", x);
@@ -553,7 +541,6 @@ function drawHistoryChart() {
             svg.appendChild(vLine);
         }
         
-        // X-axis label text
         const text = document.createElementNS(svgNamespace, "text");
         text.setAttribute("x", x);
         text.setAttribute("y", CHART_HEIGHT - CHART_MARGIN.bottom + 20);
@@ -562,64 +549,72 @@ function drawHistoryChart() {
         svg.appendChild(text);
     }
     
-    // 4. Construct path points string
-    let pathD = "";
-    projectedPoints.forEach((pt, i) => {
-        if (i === 0) {
-            pathD += `M ${pt.x} ${pt.y}`;
-        } else {
-            pathD += ` L ${pt.x} ${pt.y}`;
-        }
+    // 3. Project and Draw each active series
+    const seriesProjectedData = {};
+    const allHistoryKeys = Object.keys(state.history).sort();
+    
+    activeSeriesNames.forEach(name => {
+        const pts = state.history[name] || [];
+        if (pts.length === 0) return;
+        
+        const data = pts.map(pt => ({
+            timestamp: new Date(pt.timestamp).getTime(),
+            value: pt.value
+        })).sort((a, b) => a.timestamp - b.timestamp);
+        
+        const projectedPoints = data.map(pt => {
+            const x = CHART_MARGIN.left + ((pt.timestamp - tMin) / (tMax - tMin)) * chartWidth;
+            const y = CHART_MARGIN.top + (1 - pt.value) * chartHeight;
+            return { x, y, timestamp: pt.timestamp, value: pt.value };
+        });
+        
+        seriesProjectedData[name] = projectedPoints;
+        
+        const colorIdx = allHistoryKeys.indexOf(name);
+        const color = getQuotaColor(name, colorIdx);
+        
+        // Draw line path
+        let pathD = "";
+        projectedPoints.forEach((pt, idx) => {
+            if (idx === 0) pathD += `M ${pt.x} ${pt.y}`;
+            else pathD += ` L ${pt.x} ${pt.y}`;
+        });
+        
+        const linePath = document.createElementNS(svgNamespace, "path");
+        linePath.setAttribute("d", pathD);
+        linePath.setAttribute("class", "chart-line-path");
+        linePath.setAttribute("stroke", color);
+        linePath.setAttribute("filter", "url(#chart-glow)");
+        svg.appendChild(linePath);
+        
+        // Draw point dots
+        projectedPoints.forEach(pt => {
+            const circle = document.createElementNS(svgNamespace, "circle");
+            circle.setAttribute("cx", pt.x);
+            circle.setAttribute("cy", pt.y);
+            circle.setAttribute("r", "3.5");
+            circle.setAttribute("class", "chart-data-point");
+            circle.setAttribute("stroke", color);
+            svg.appendChild(circle);
+        });
     });
     
-    // Draw area path (gradient filled region)
-    if (projectedPoints.length > 0) {
-        const areaD = `${pathD} L ${projectedPoints[projectedPoints.length - 1].x} ${CHART_HEIGHT - CHART_MARGIN.bottom} L ${projectedPoints[0].x} ${CHART_HEIGHT - CHART_MARGIN.bottom} Z`;
-        const areaPath = document.createElementNS(svgNamespace, "path");
-        areaPath.setAttribute("d", areaD);
-        areaPath.setAttribute("class", "chart-area-path");
-        svg.appendChild(areaPath);
-    }
+    // 4. Create and mount trackers
+    const trackerGroup = document.createElementNS(svgNamespace, "g");
+    svg.appendChild(trackerGroup);
     
-    // Draw line path (accent colored stroke line)
-    const linePath = document.createElementNS(svgNamespace, "path");
-    linePath.setAttribute("d", pathD);
-    linePath.setAttribute("class", "chart-line-path");
-    linePath.setAttribute("stroke", accentColor);
-    linePath.setAttribute("filter", "url(#chart-glow)");
-    svg.appendChild(linePath);
-    
-    // 5. Draw data point markers (circles)
-    projectedPoints.forEach(pt => {
-        const circle = document.createElementNS(svgNamespace, "circle");
-        circle.setAttribute("cx", pt.x);
-        circle.setAttribute("cy", pt.y);
-        circle.setAttribute("r", "4");
-        circle.setAttribute("class", "chart-data-point");
-        circle.setAttribute("stroke", accentColor);
-        svg.appendChild(circle);
-    });
-    
-    // 6. Append absolute vertical crosshair tracker and floating circle
     const trackerLine = document.createElementNS(svgNamespace, "line");
     trackerLine.setAttribute("y1", CHART_MARGIN.top);
     trackerLine.setAttribute("y2", CHART_HEIGHT - CHART_MARGIN.bottom);
-    trackerLine.setAttribute("stroke", "rgba(255, 255, 255, 0.2)");
+    trackerLine.setAttribute("stroke", "rgba(255, 255, 255, 0.18)");
     trackerLine.setAttribute("stroke-width", "1.5");
     trackerLine.setAttribute("stroke-dasharray", "3 3");
     trackerLine.style.display = "none";
     svg.appendChild(trackerLine);
     
-    const trackerDot = document.createElementNS(svgNamespace, "circle");
-    trackerDot.setAttribute("r", "5.5");
-    trackerDot.setAttribute("stroke", "#141124");
-    trackerDot.setAttribute("stroke-width", "2");
-    trackerDot.style.display = "none";
-    svg.appendChild(trackerDot);
-    
     elements.chartContainer.appendChild(svg);
     
-    // 7. Inject Tooltip overlay element
+    // Tooltip overlay element
     let tooltip = document.getElementById('chart-tooltip');
     if (!tooltip) {
         tooltip = document.createElement('div');
@@ -628,68 +623,106 @@ function drawHistoryChart() {
         elements.chartContainer.appendChild(tooltip);
     }
     
-    // Interactive mouse trackers
     const hideTracker = () => {
         trackerLine.style.display = "none";
-        trackerDot.style.display = "none";
+        trackerGroup.innerHTML = '';
         tooltip.style.opacity = "0";
         tooltip.style.transform = "translateY(5px)";
     };
     
+    // Mouse hover tracking
     svg.addEventListener('mousemove', (e) => {
         const rect = svg.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
-        
-        // Translate client-pixel offset to relative SVG coordinates
         const svgX = (mouseX / rect.width) * CHART_WIDTH;
         
-        // Find nearest data point horizontally
-        let closestPt = null;
-        let minDistance = Infinity;
+        if (svgX < CHART_MARGIN.left || svgX > CHART_WIDTH - CHART_MARGIN.right) {
+            hideTracker();
+            return;
+        }
         
-        projectedPoints.forEach(pt => {
-            const dist = Math.abs(pt.x - svgX);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestPt = pt;
+        // Find nearest points in all active series
+        const hoverPoints = [];
+        activeSeriesNames.forEach(name => {
+            const pts = seriesProjectedData[name] || [];
+            if (pts.length === 0) return;
+            
+            let closest = pts[0];
+            let minDist = Math.abs(pts[0].x - svgX);
+            for (let i = 1; i < pts.length; i++) {
+                const dist = Math.abs(pts[i].x - svgX);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = pts[i];
+                }
+            }
+            
+            if (minDist < 60) {
+                hoverPoints.push({
+                    name: name,
+                    pt: closest,
+                    dist: minDist
+                });
             }
         });
         
-        // Highlight crosshair details if cursor lies within reasonable distance threshold
-        if (closestPt && minDistance < 40) {
-            trackerLine.setAttribute('x1', closestPt.x);
-            trackerLine.setAttribute('x2', closestPt.x);
-            trackerLine.style.display = "block";
+        if (hoverPoints.length === 0) {
+            hideTracker();
+            return;
+        }
+        
+        // Alight crosshair tracker to closest matching point's time coordinate
+        hoverPoints.sort((a, b) => a.dist - b.dist);
+        const bestPtX = hoverPoints[0].pt.x;
+        const bestPtTime = hoverPoints[0].pt.timestamp;
+        
+        trackerLine.setAttribute('x1', bestPtX);
+        trackerLine.setAttribute('x2', bestPtX);
+        trackerLine.style.display = "block";
+        
+        // Render crosshair dots and tooltips
+        trackerGroup.innerHTML = '';
+        let tooltipValuesHTML = '';
+        
+        // Sort items alphabetically
+        const sortedHoverPoints = hoverPoints.sort((a, b) => a.name.localeCompare(b.name));
+        
+        sortedHoverPoints.forEach(item => {
+            const colorIdx = allHistoryKeys.indexOf(item.name);
+            const color = getQuotaColor(item.name, colorIdx);
             
-            trackerDot.setAttribute('cx', closestPt.x);
-            trackerDot.setAttribute('cy', closestPt.y);
+            const dot = document.createElementNS(svgNamespace, "circle");
+            dot.setAttribute("cx", bestPtX);
+            dot.setAttribute("cy", item.pt.y);
+            dot.setAttribute("r", "5.5");
+            dot.setAttribute("fill", color);
+            dot.setAttribute("stroke", "#141124");
+            dot.setAttribute("stroke-width", "2");
+            trackerGroup.appendChild(dot);
             
-            const ptStatus = getQuotaState(closestPt.value);
-            const ptColor = getStatusRGBHex(ptStatus);
-            
-            trackerDot.setAttribute('fill', ptColor);
-            trackerDot.style.display = "block";
-            
-            // Convert relative SVG placement to percentage coordinates
-            const tooltipLeft = (closestPt.x / CHART_WIDTH) * rect.width;
-            const tooltipTop = (closestPt.y / CHART_HEIGHT) * rect.height;
-            
-            tooltip.style.left = `${tooltipLeft + 15}px`;
-            tooltip.style.top = `${tooltipTop - 50}px`;
-            tooltip.style.borderColor = ptColor;
-            tooltip.style.opacity = "1";
-            tooltip.style.transform = "translateY(0)";
-            
-            tooltip.innerHTML = `
-                <div class="chart-tooltip-time">${formatTooltipTime(closestPt.timestamp)}</div>
+            tooltipValuesHTML += `
                 <div class="chart-tooltip-value">
-                    <span class="chart-tooltip-marker" style="background: ${ptColor}"></span>
-                    Remaining: ${(closestPt.value * 100).toFixed(2)}%
+                    <span class="chart-tooltip-marker" style="background: ${color}"></span>
+                    <span style="color: var(--text-secondary); margin-right: 0.5rem;">${item.name}:</span>
+                    <strong>${(item.pt.value * 100).toFixed(1)}%</strong>
                 </div>
             `;
-        } else {
-            hideTracker();
-        }
+        });
+        
+        const tooltipLeft = (bestPtX / CHART_WIDTH) * rect.width;
+        const avgY = hoverPoints.reduce((acc, curr) => acc + curr.pt.y, 0) / hoverPoints.length;
+        const tooltipTop = (avgY / CHART_HEIGHT) * rect.height;
+        
+        tooltip.style.left = `${tooltipLeft + 15}px`;
+        tooltip.style.top = `${tooltipTop - 50}px`;
+        tooltip.style.borderColor = "rgba(255, 255, 255, 0.15)";
+        tooltip.style.opacity = "1";
+        tooltip.style.transform = "translateY(0)";
+        
+        tooltip.innerHTML = `
+            <div class="chart-tooltip-time">${formatTooltipTime(bestPtTime)}</div>
+            ${tooltipValuesHTML}
+        `;
     });
     
     svg.addEventListener('mouseleave', hideTracker);
@@ -700,13 +733,6 @@ function getQuotaState(fraction) {
     if (fraction <= 0.20) return 'danger';
     if (fraction <= 0.50) return 'warning';
     return 'safe';
-}
-
-// Get status color in hex
-function getStatusRGBHex(status) {
-    if (status === 'danger') return '#ff007f'; // Neon magenta
-    if (status === 'warning') return '#f1c40f'; // Amber
-    return '#00f2fe'; // Neon Teal
 }
 
 function sanitizeId(str) {
