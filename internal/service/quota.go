@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"sync"
@@ -91,7 +93,11 @@ func NewQuotaService() QuotaService {
 
 	if projectID == "" {
 		log.Println("GOOGLE_CLOUD_PROJECT is empty. Falling back to in-memory quota store.")
-		return &quotaService{gcpEnabled: false}
+		s := &quotaService{gcpEnabled: false}
+		if flag.Lookup("test.v") == nil {
+			s.seedFakeData()
+		}
+		return s
 	}
 
 	ctx := context.Background()
@@ -405,4 +411,72 @@ func (s *quotaService) listTimeSeriesPoints(ctx context.Context, metricType stri
 		results[quotaName] = points
 	}
 	return results, nil
+}
+
+// seedFakeData populates local in-memory store with mock quotas and histories for demo/dev purposes.
+func (s *quotaService) seedFakeData() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC()
+
+	// 1. Set current states
+	s.lastQuota = model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"gemini-pro-5h": {
+				RemainingFraction: 0.85,
+				ResetTime:         now.Add(4 * time.Hour),
+				ResetInSeconds:    14400,
+			},
+			"gemini-flash-5h": {
+				RemainingFraction: 0.42,
+				ResetTime:         now.Add(2 * time.Hour),
+				ResetInSeconds:    7200,
+			},
+			"3p-5h": {
+				RemainingFraction: 0.15,
+				ResetTime:         now.Add(1 * time.Hour),
+				ResetInSeconds:    3600,
+			},
+		},
+	}
+	s.hasRecords = true
+
+	// 2. Generate 24 hours of simulated historical data (25 points, hourly intervals)
+	for i := 24; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+
+		// Gemini Pro: Wave oscillation dipping around midday and recovering
+		proVal := 0.72 + 0.18*math.Sin(float64(24-i)*0.45)
+
+		// Gemini Flash: Step decay dropping gradually and resetting every 8 hours
+		flashHourIndex := float64((24 - i) % 8)
+		flashVal := 0.90 - flashHourIndex*0.08
+
+		// 3p-5h: Linear decline down to critical levels
+		threePVal := 0.80 - float64(24-i)*0.028
+
+		s.history = append(s.history, historicalRecord{
+			Timestamp: t,
+			Quota: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"gemini-pro-5h": {
+						RemainingFraction: math.Max(0.0, math.Min(1.0, proVal)),
+						ResetTime:         t.Add(4 * time.Hour),
+						ResetInSeconds:    14400,
+					},
+					"gemini-flash-5h": {
+						RemainingFraction: math.Max(0.0, math.Min(1.0, flashVal)),
+						ResetTime:         t.Add(2 * time.Hour),
+						ResetInSeconds:    7200,
+					},
+					"3p-5h": {
+						RemainingFraction: math.Max(0.0, math.Min(1.0, threePVal)),
+						ResetTime:         t.Add(1 * time.Hour),
+						ResetInSeconds:    3600,
+					},
+				},
+			},
+		})
+	}
 }
