@@ -352,7 +352,19 @@ function processQuotaData(quotaMap) {
     
     sortedKeys.forEach(name => {
         const q = quotaMap[name];
-        const targetTime = now + (q.reset_in_seconds * 1000);
+        
+        let targetTime = null;
+        if (q.reset_time && !q.reset_time.startsWith('0001-01-01')) {
+            const parsedTime = new Date(q.reset_time).getTime();
+            if (!isNaN(parsedTime)) {
+                targetTime = parsedTime;
+            }
+        }
+        
+        // Fallback to reset_in_seconds if reset_time is invalid/missing
+        if (!targetTime && q.reset_in_seconds > 0) {
+            targetTime = now + (q.reset_in_seconds * 1000);
+        }
         
         state.activeTimers.push({
             name: name,
@@ -807,6 +819,12 @@ function tickCountdowns() {
         const el = document.getElementById(elementId);
         if (!el) return;
         
+        if (!timer.targetTime) {
+            el.textContent = 'Never';
+            el.classList.remove('expired');
+            return;
+        }
+        
         const diffMs = timer.targetTime - now;
         
         if (diffMs <= 0) {
@@ -814,6 +832,8 @@ function tickCountdowns() {
             el.classList.add('expired');
             return;
         }
+        
+        el.classList.remove('expired');
         
         const diffSecs = Math.floor(diffMs / 1000);
         const hours = Math.floor(diffSecs / 3600);
