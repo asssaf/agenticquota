@@ -60,21 +60,6 @@ body {
                 linear-gradient(180deg, #09070f 0%, #110d21 100%);
 }
 
-.bg-glow::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at 50% 50%, rgba(255, 0, 127, 0.03) 0%, transparent 50%);
-    animation: drift 25s infinite alternate linear;
-}
-
-@keyframes drift {
-    0% { transform: rotate(0deg) translate(0, 0); }
-    100% { transform: rotate(360deg) translate(10%, 10%); }
-}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
