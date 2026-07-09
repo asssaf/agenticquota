@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ var ErrNotFound = errors.New("no quota data found")
 // QuotaService provides operations on quotas.
 type QuotaService interface {
 	GetQuota(ctx context.Context) (model.QuotaResponse, error)
+	GetQuotaHistory(ctx context.Context) (model.QuotaHistoryResponse, error)
 	SaveQuota(ctx context.Context, quota model.QuotaResponse) error
 }
 
@@ -58,10 +60,16 @@ func (c *realGCPClient) listTimeSeries(ctx context.Context, req *monitoringpb.Li
 	return list, nil
 }
 
+type historicalRecord struct {
+	Timestamp time.Time
+	Quota     model.QuotaResponse
+}
+
 type quotaService struct {
 	mu         sync.RWMutex
 	lastQuota  model.QuotaResponse
 	hasRecords bool
+	history    []historicalRecord
 
 	gcpEnabled bool
 	projectID  string
@@ -166,6 +174,29 @@ func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse)
 
 		s.lastQuota = quota
 		s.hasRecords = true
+
+		// Record history in-memory
+		s.history = append(s.history, historicalRecord{
+			Timestamp: time.Now().UTC(),
+			Quota:     quota,
+		})
+
+		// Limit in-memory history size to prevent memory exhaustion
+		const maxHistory = 500
+		if len(s.history) > maxHistory {
+			s.history = s.history[len(s.history)-maxHistory:]
+		}
+
+		// Prune records older than 24 hours
+		cutoff := time.Now().Add(-24 * time.Hour)
+		idx := 0
+		for idx < len(s.history) && s.history[idx].Timestamp.Before(cutoff) {
+			idx++
+		}
+		if idx > 0 {
+			s.history = s.history[idx:]
+		}
+
 		return nil
 	}
 
@@ -287,4 +318,86 @@ func makeTimeSeries(projectID string, metricType string, quotaName string, value
 			},
 		},
 	}
+}
+
+// GetQuotaHistory retrieves the 24-hour historical utilization series for all quotas.
+func (s *quotaService) GetQuotaHistory(ctx context.Context) (model.QuotaHistoryResponse, error) {
+	if !s.gcpEnabled {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		historyMap := make(map[string][]model.HistoricalPoint)
+		for _, record := range s.history {
+			for name, details := range record.Quota.Quota {
+				historyMap[name] = append(historyMap[name], model.HistoricalPoint{
+					Timestamp: record.Timestamp,
+					Value:     details.RemainingFraction,
+				})
+			}
+		}
+		return model.QuotaHistoryResponse{History: historyMap}, nil
+	}
+
+	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction")
+	if err != nil {
+		return model.QuotaHistoryResponse{}, fmt.Errorf("failed to retrieve historical remaining fraction: %w", err)
+	}
+
+	return model.QuotaHistoryResponse{History: fractions}, nil
+}
+
+func (s *quotaService) listTimeSeriesPoints(ctx context.Context, metricType string) (map[string][]model.HistoricalPoint, error) {
+	now := time.Now()
+	startTime := now.Add(-24 * time.Hour)
+
+	req := &monitoringpb.ListTimeSeriesRequest{
+		Name:   "projects/" + s.projectID,
+		Filter: fmt.Sprintf(`metric.type = "%s"`, metricType),
+		Interval: &monitoringpb.TimeInterval{
+			StartTime: timestamppb.New(startTime),
+			EndTime:   timestamppb.New(now),
+		},
+		View: monitoringpb.ListTimeSeriesRequest_FULL,
+	}
+
+	timeSeriesList, err := s.client.listTimeSeries(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(map[string][]model.HistoricalPoint)
+	for _, ts := range timeSeriesList {
+		quotaName := ts.Metric.Labels["quota_name"]
+		if quotaName == "" {
+			continue
+		}
+		if len(ts.Points) == 0 {
+			continue
+		}
+
+		var points []model.HistoricalPoint
+		for _, p := range ts.Points {
+			var val float64
+			switch p.Value.Value.(type) {
+			case *monitoringpb.TypedValue_DoubleValue:
+				val = p.Value.GetDoubleValue()
+			case *monitoringpb.TypedValue_Int64Value:
+				val = float64(p.Value.GetInt64Value())
+			default:
+				continue
+			}
+			points = append(points, model.HistoricalPoint{
+				Timestamp: p.Interval.EndTime.AsTime().UTC(),
+				Value:     val,
+			})
+		}
+
+		// Sort points chronologically (oldest first)
+		sort.Slice(points, func(i, j int) bool {
+			return points[i].Timestamp.Before(points[j].Timestamp)
+		})
+
+		results[quotaName] = points
+	}
+	return results, nil
 }

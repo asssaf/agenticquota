@@ -13,3 +13,14 @@ type QuotaDetails struct {
 type QuotaResponse struct {
 	Quota map[string]QuotaDetails `json:"quota"`
 }
+
+// HistoricalPoint represents a single metric data point in time.
+type HistoricalPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
+}
+
+// QuotaHistoryResponse represents the historical metrics API response.
+type QuotaHistoryResponse struct {
+	History map[string][]HistoricalPoint `json:"history"`
+}

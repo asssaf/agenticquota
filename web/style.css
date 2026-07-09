@@ -757,24 +757,289 @@ body {
     border-color: var(--color-safe);
 }
 
+/* Navigation Tabs */
+.dashboard-nav {
+    display: flex;
+    gap: 0.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    padding: 0.25rem;
+    border-radius: 10px;
+}
+
+.nav-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 550;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.nav-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nav-tab.active {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Tab Section Views */
+.view-section {
+    animation: fadeIn var(--transition-normal);
+}
+
+/* History Graph Layout */
+.history-view-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 2rem;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.history-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.history-view-header h2 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.selector-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.dropdown-control {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    min-width: 180px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.dropdown-control:focus {
+    outline: none;
+    border-color: var(--color-safe);
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+}
+
+.dropdown-control option {
+    background: #141124;
+    color: var(--text-primary);
+}
+
+/* Chart Canvas Area */
+.chart-content {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    position: relative;
+    min-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.chart-container {
+    width: 100%;
+    height: 100%;
+    padding: 1rem;
+    position: relative;
+}
+
+.chart-svg {
+    width: 100%;
+    height: 100%;
+    min-height: 350px;
+}
+
+/* SVG Chart Elements */
+.chart-grid-line {
+    stroke: rgba(255, 255, 255, 0.04);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+.chart-axis-line {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 1;
+}
+
+.chart-axis-text {
+    fill: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+}
+
+.chart-axis-text.y-axis {
+    text-anchor: end;
+}
+
+.chart-axis-text.x-axis {
+    text-anchor: middle;
+}
+
+.chart-line-path {
+    fill: none;
+    stroke: var(--color-safe);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 4px 10px rgba(0, 242, 254, 0.4));
+}
+
+.chart-area-path {
+    fill: url(#chart-gradient);
+    stroke: none;
+}
+
+.chart-data-point {
+    fill: #141124;
+    stroke: var(--color-safe);
+    stroke-width: 3;
+    cursor: pointer;
+    transition: r 0.15s ease-in-out;
+}
+
+.chart-data-point:hover {
+    r: 7;
+}
+
+/* Loader & Empty states inside chart card */
+.chart-loading-state, .chart-empty-state {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid var(--color-safe);
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+}
+
+.chart-empty-state {
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.4;
+}
+
+/* Chart Tooltip Overlay */
+.chart-tooltip {
+    position: absolute;
+    background: rgba(20, 17, 36, 0.9);
+    border: 1px solid var(--color-safe);
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    pointer-events: none;
+    font-size: 0.75rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+    opacity: 0;
+}
+
+.chart-tooltip-time {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.chart-tooltip-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.chart-tooltip-marker {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-safe);
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
     .header-container {
         flex-direction: column;
         gap: 1rem;
-        align-items: stretch;
+        align-items: center;
     }
     
     .logo-group {
         justify-content: center;
     }
+
+    .dashboard-nav {
+        width: 100%;
+        justify-content: center;
+    }
     
     .header-controls {
         justify-content: space-between;
+        width: 100%;
     }
     
     .footer-container {
         flex-direction: column;
         text-align: center;
+    }
+
+    .history-view-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .selector-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .dropdown-control {
+        flex: 1;
     }
 }

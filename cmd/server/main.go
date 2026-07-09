@@ -19,6 +19,10 @@ func setupRouter() *http.ServeMux {
 	quotaRoute := http.HandlerFunc(quotaHandler.HandleQuota)
 	mux.Handle("/api/v1/quota", handler.APIKeyMiddleware(quotaRoute))
 
+	// Expose /api/v1/quota/history wrapped in the APIKeyMiddleware
+	historyRoute := http.HandlerFunc(quotaHandler.HandleQuotaHistory)
+	mux.Handle("/api/v1/quota/history", handler.APIKeyMiddleware(historyRoute))
+
 	// Health check endpoint (public, standard for GAE health checks / lifecycles)
 	mux.HandleFunc("/_ah/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

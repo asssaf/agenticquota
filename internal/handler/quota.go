@@ -111,3 +111,31 @@ func (h *QuotaHandler) postQuota(w http.ResponseWriter, r *http.Request) {
 		"message": "quota updated successfully",
 	})
 }
+
+// HandleQuotaHistory routes and processes GET requests for /api/v1/quota/history.
+func (h *QuotaHandler) HandleQuotaHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	response, err := h.service.GetQuotaHistory(r.Context())
+	if err != nil {
+		log.Printf("Error retrieving quota history: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "failed to retrieve quota history",
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}

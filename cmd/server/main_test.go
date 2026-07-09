@@ -43,6 +43,22 @@ func TestSetupRouter_QuotaEndpointProtected(t *testing.T) {
 	}
 }
 
+func TestSetupRouter_QuotaHistoryEndpointProtected(t *testing.T) {
+	mux := setupRouter()
+
+	req, err := http.NewRequest("GET", "/api/v1/quota/history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 Unauthorized, got: %d", rr.Code)
+	}
+}
+
 func TestSetupRouter_DashboardRoute(t *testing.T) {
 	mux := setupRouter()
 

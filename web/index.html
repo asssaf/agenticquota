@@ -26,6 +26,10 @@
                     <p class="subtitle">Agent Resource Telemetry</p>
                 </div>
             </div>
+            <nav class="dashboard-nav">
+                <button id="tab-active" class="nav-tab active" data-tab="active">Overview</button>
+                <button id="tab-history" class="nav-tab" data-tab="history">History Graphs</button>
+            </nav>
             <div class="header-controls">
                 <div class="status-indicator-group">
                     <span id="conn-indicator" class="status-dot status-offline"></span>
@@ -65,15 +69,43 @@
             </div>
         </div>
 
-        <!-- Quota Grid -->
-        <div id="quota-grid" class="quota-grid">
-            <!-- Dynamically populated via JS -->
-            <div class="loading-cards">
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
+        <!-- Tab 1: Overview Grid -->
+        <section id="view-active" class="view-section">
+            <div id="quota-grid" class="quota-grid">
+                <div class="loading-cards">
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- Tab 2: History Graph View -->
+        <section id="view-history" class="view-section hidden">
+            <div class="history-view-card">
+                <div class="history-view-header">
+                    <h2>Utilization History (24h)</h2>
+                    <div class="selector-group">
+                        <label for="quota-select">Quota Name:</label>
+                        <select id="quota-select" class="dropdown-control">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-content">
+                    <div id="chart-loading" class="chart-loading-state hidden">
+                        <div class="loading-spinner"></div>
+                        <p>Fetching history metrics...</p>
+                    </div>
+                    <div id="chart-empty" class="chart-empty-state">
+                        <p>No history points logged for this quota name in the last 24h.</p>
+                    </div>
+                    <div id="chart-container" class="chart-container">
+                        <!-- SVG injects here -->
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- API Settings Modal -->
