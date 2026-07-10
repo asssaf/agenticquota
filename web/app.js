@@ -601,8 +601,13 @@ function drawHistoryChart() {
         // Draw line path
         let pathD = "";
         projectedPoints.forEach((pt, idx) => {
-            if (idx === 0) pathD += `M ${pt.x} ${pt.y}`;
-            else pathD += ` L ${pt.x} ${pt.y}`;
+            if (idx === 0) {
+                pathD += `M ${pt.x} ${pt.y}`;
+            } else {
+                const prevPt = projectedPoints[idx - 1];
+                // Always use step-after transition to represent discrete status checks
+                pathD += ` L ${pt.x} ${prevPt.y} L ${pt.x} ${pt.y}`;
+            }
         });
         
         const linePath = document.createElementNS(svgNamespace, "path");
