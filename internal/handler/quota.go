@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"agenticquota/internal/model"
 	"agenticquota/internal/service"
@@ -95,6 +96,31 @@ func (h *QuotaHandler) postQuota(w http.ResponseWriter, r *http.Request) {
 			"error": "invalid request body or JSON format",
 		})
 		return
+	}
+
+	// Validate quota details
+	for _, details := range req.Quota {
+		if details.ResetTime.Before(time.Now()) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "invalid quota: reset time is in the past",
+			})
+			return
+		}
+		if details.ResetInSeconds <= 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "invalid quota: remaining seconds must be positive",
+			})
+			return
+		}
+		if details.RemainingFraction < 0 || details.RemainingFraction > 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "invalid quota: remaining fraction must be between 0 and 1",
+			})
+			return
+		}
 	}
 
 	if err := h.service.SaveQuota(r.Context(), req); err != nil {

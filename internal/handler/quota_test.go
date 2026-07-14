@@ -60,7 +60,7 @@ func TestQuotaHandler_PostAndGet_Success(t *testing.T) {
 		Quota: map[string]model.QuotaDetails{
 			"3p-5h": {
 				RemainingFraction: 0.9,
-				ResetTime:         time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC),
+				ResetTime:         time.Now().Add(2 * time.Hour).Truncate(time.Second),
 				ResetInSeconds:    17999,
 			},
 		},
@@ -240,7 +240,7 @@ func TestQuotaHandler_GetQuotaResetHistory_Success(t *testing.T) {
 	h := NewQuotaHandler(svc)
 
 	// 1. Post a quota payload to populate history
-	resetTime := time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC)
+	resetTime := time.Now().Add(2 * time.Hour).Truncate(time.Second)
 	payload := model.QuotaResponse{
 		Quota: map[string]model.QuotaDetails{
 			"3p-5h": {
@@ -294,5 +294,106 @@ func TestQuotaHandler_GetQuotaResetHistory_Success(t *testing.T) {
 	}
 	if !points1[0].ResetTime.Equal(resetTime) {
 		t.Errorf("expected reset time %v, got: %v", resetTime, points1[0].ResetTime)
+	}
+}
+
+func TestQuotaHandler_PostQuota_ValidationFailure(t *testing.T) {
+	t.Setenv("QUOTA_API_KEY", "testkey")
+	svc := service.NewQuotaService()
+	h := NewQuotaHandler(svc)
+
+	tests := []struct {
+		name       string
+		payload    model.QuotaResponse
+		wantStatus int
+	}{
+		{
+			name: "reset time in the past",
+			payload: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"3p-5h": {
+						RemainingFraction: 0.9,
+						ResetTime:         time.Now().Add(-1 * time.Minute),
+						ResetInSeconds:    60,
+					},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "reset in seconds not positive (zero)",
+			payload: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"3p-5h": {
+						RemainingFraction: 0.9,
+						ResetTime:         time.Now().Add(1 * time.Hour),
+						ResetInSeconds:    0,
+					},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "reset in seconds not positive (negative)",
+			payload: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"3p-5h": {
+						RemainingFraction: 0.9,
+						ResetTime:         time.Now().Add(1 * time.Hour),
+						ResetInSeconds:    -10,
+					},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "remaining fraction less than zero",
+			payload: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"3p-5h": {
+						RemainingFraction: -0.1,
+						ResetTime:         time.Now().Add(1 * time.Hour),
+						ResetInSeconds:    60,
+					},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "remaining fraction greater than one",
+			payload: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					"3p-5h": {
+						RemainingFraction: 1.1,
+						ResetTime:         time.Now().Add(1 * time.Hour),
+						ResetInSeconds:    60,
+					},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := json.Marshal(tt.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req, err := http.NewRequest("POST", "/api/v1/quota", bytes.NewBuffer(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("X-API-Key", "testkey")
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			h.HandleQuota(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got: %d, response: %s", tt.wantStatus, rr.Code, rr.Body.String())
+			}
+		})
 	}
 }
