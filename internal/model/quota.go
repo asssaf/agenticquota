@@ -27,7 +27,6 @@ type QuotaHistoryResponse struct {
 
 // HistoricalResetPoint represents a single historical reset time point in time.
 type HistoricalResetPoint struct {
-	Timestamp time.Time `json:"timestamp"`
 	ResetTime time.Time `json:"reset_time"`
 }
 

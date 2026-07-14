@@ -268,3 +268,74 @@ func TestQuotaService_GetQuotaResetHistory_GCP(t *testing.T) {
 		t.Errorf("expected reset time %v, got %v", resetTime, points[0].ResetTime)
 	}
 }
+
+func TestQuotaService_GetQuotaResetHistory_Deduplication(t *testing.T) {
+	svc := NewQuotaService()
+
+	resetTime1 := time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC)
+	resetTime2 := time.Date(2026, 7, 8, 11, 0, 52, 0, time.UTC)
+
+	// Save quota with resetTime1
+	payload1 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.9,
+				ResetTime:         resetTime1,
+				ResetInSeconds:    7200,
+			},
+		},
+	}
+	if err := svc.SaveQuota(context.Background(), payload1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Save same quota again with resetTime1 (duplicate)
+	payload2 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.8,
+				ResetTime:         resetTime1,
+				ResetInSeconds:    3600,
+			},
+		},
+	}
+	if err := svc.SaveQuota(context.Background(), payload2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Save quota with resetTime2 (new reset time)
+	payload3 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.7,
+				ResetTime:         resetTime2,
+				ResetInSeconds:    7200,
+			},
+		},
+	}
+	if err := svc.SaveQuota(context.Background(), payload3); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.GetQuotaResetHistory(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	points, ok := res.History["3p-5h"]
+	if !ok {
+		t.Fatal("expected reset history for key '3p-5h'")
+	}
+
+	// Should contain exactly 2 unique reset times (resetTime1 and resetTime2)
+	if len(points) != 2 {
+		t.Fatalf("expected exactly 2 points after deduplication, got: %d", len(points))
+	}
+
+	if !points[0].ResetTime.Equal(resetTime1) {
+		t.Errorf("expected points[0] to be %v, got %v", resetTime1, points[0].ResetTime)
+	}
+	if !points[1].ResetTime.Equal(resetTime2) {
+		t.Errorf("expected points[1] to be %v, got %v", resetTime2, points[1].ResetTime)
+	}
+}
