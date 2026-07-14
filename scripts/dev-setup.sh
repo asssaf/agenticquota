@@ -14,8 +14,8 @@ fi
 # Configure Go workspace and build cache to be under ~/host-cache/go
 echo "Configuring Go workspace and cache locations under ~/host-cache/go..."
 mkdir -p "$HOME/host-cache/go"
-go env -w GOPATH="$HOME/host-cache/go"
-go env -w GOCACHE="$HOME/host-cache/go/cache"
+GOTOOLCHAIN=local go env -w GOPATH="$HOME/host-cache/go"
+GOTOOLCHAIN=local go env -w GOCACHE="$HOME/host-cache/go/cache"
 
 
 
