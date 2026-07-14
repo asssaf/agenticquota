@@ -144,11 +144,18 @@ func (s *gcpStore) GetQuotaResetHistory(ctx context.Context, days int) (model.Qu
 	historyMap := make(map[string][]model.HistoricalResetPoint)
 	for name, points := range pointsMap {
 		var resetPoints []model.HistoricalResetPoint
+		seen := make(map[int64]bool)
 		for _, p := range points {
-			resetPoints = append(resetPoints, model.HistoricalResetPoint{
-				Timestamp: p.Timestamp,
-				ResetTime: time.Unix(int64(p.Value), 0).UTC(),
-			})
+			unixSec := int64(p.Value)
+			if unixSec <= 0 {
+				continue
+			}
+			if !seen[unixSec] {
+				seen[unixSec] = true
+				resetPoints = append(resetPoints, model.HistoricalResetPoint{
+					ResetTime: time.Unix(unixSec, 0).UTC(),
+				})
+			}
 		}
 		historyMap[name] = resetPoints
 	}

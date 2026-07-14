@@ -97,15 +97,28 @@ func (s *inMemoryStore) GetQuotaResetHistory(ctx context.Context, days int) (mod
 
 	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	historyMap := make(map[string][]model.HistoricalResetPoint)
+	seenMap := make(map[string]map[int64]bool)
+
 	for _, record := range s.history {
 		if record.Timestamp.Before(cutoff) {
 			continue
 		}
 		for name, details := range record.Quota.Quota {
-			historyMap[name] = append(historyMap[name], model.HistoricalResetPoint{
-				Timestamp: record.Timestamp,
-				ResetTime: details.ResetTime,
-			})
+			if details.ResetTime.IsZero() {
+				continue
+			}
+			resetUTC := details.ResetTime.UTC()
+			unixSec := resetUTC.Unix()
+
+			if _, ok := seenMap[name]; !ok {
+				seenMap[name] = make(map[int64]bool)
+			}
+			if !seenMap[name][unixSec] {
+				seenMap[name][unixSec] = true
+				historyMap[name] = append(historyMap[name], model.HistoricalResetPoint{
+					ResetTime: resetUTC,
+				})
+			}
 		}
 	}
 	return model.QuotaResetHistoryResponse{History: historyMap}, nil
