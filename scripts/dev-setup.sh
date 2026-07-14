@@ -1,8 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# Script to set up Google Cloud SDK (gcloud) and dev_appserver.py
+# Script to set up Go, Google Cloud SDK (gcloud) and dev_appserver.py
 # Target directory: ~/host-cache/gcloud
+
+# Install Go (golang) if not already installed
+if ! command -v go &> /dev/null; then
+    echo "Go is not installed. Installing golang..."
+    sudo apt update
+    sudo apt install -y golang
+fi
+
 
 TARGET_DIR="$HOME/host-cache/gcloud"
 SDK_DIR="$TARGET_DIR/google-cloud-sdk"
