@@ -81,9 +81,10 @@ func TestQuotaService_GetAndSave(t *testing.T) {
 func TestQuotaService_GCP(t *testing.T) {
 	mockCli := &mockGCPClient{}
 	svc := &quotaService{
-		gcpEnabled: true,
-		projectID:  "test-project-123",
-		client:     mockCli,
+		store: &gcpStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
 	}
 
 	// 1. GetQuota when empty -> expect ErrNotFound
@@ -164,9 +165,10 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 		listErr:   errors.New("monitoring list failed"),
 	}
 	svc := &quotaService{
-		gcpEnabled: true,
-		projectID:  "test-project-123",
-		client:     mockCli,
+		store: &gcpStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
 	}
 
 	// 1. SaveQuota error
