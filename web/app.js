@@ -291,31 +291,81 @@ async function fetchHistoryData(isManual = false) {
     }
     
     try {
-        const response = await fetch(`/api/v1/quota/history?days=${state.selectedDays}`, {
-            method: 'GET',
-            headers: {
-                'X-API-Key': state.apiKey,
-                'Accept': 'application/json'
-            }
-        });
+        const [response, resetResponse] = await Promise.all([
+            fetch(`/api/v1/quota/history?days=${state.selectedDays}`, {
+                method: 'GET',
+                headers: {
+                    'X-API-Key': state.apiKey,
+                    'Accept': 'application/json'
+                }
+            }),
+            fetch(`/api/v1/quota/history/reset?days=${state.selectedDays}`, {
+                method: 'GET',
+                headers: {
+                    'X-API-Key': state.apiKey,
+                    'Accept': 'application/json'
+                }
+            })
+        ]);
         
-        if (response.status === 200) {
-            const data = await response.json();
-            hideBanner();
-            updateConnectionStatus('connected', 'Connected');
-            state.history = data.history || {};
-            renderLegend();
-            drawHistoryChart();
-        } else if (response.status === 401) {
+        if (response.status === 401 || resetResponse.status === 401) {
             updateConnectionStatus('unauthorized', 'Unauthorized');
             showBanner('Unauthorized API Key. Please verify your X-API-Key settings.');
             showModal();
-        } else {
+            return;
+        }
+
+        if (response.status !== 200) {
             const errData = await response.json().catch(() => ({}));
             const errMsg = errData.error || `Server error (${response.status})`;
             updateConnectionStatus('offline', 'Error');
             showBanner(errMsg);
+            return;
         }
+
+        if (resetResponse.status !== 200) {
+            const errData = await resetResponse.json().catch(() => ({}));
+            const errMsg = errData.error || `Server error (${resetResponse.status})`;
+            updateConnectionStatus('offline', 'Error');
+            showBanner(errMsg);
+            return;
+        }
+
+        const data = await response.json();
+        const resetData = await resetResponse.json();
+        hideBanner();
+        updateConnectionStatus('connected', 'Connected');
+        
+        const historyMap = data.history || {};
+        const resetMap = resetData.history || {};
+        const mergedHistory = {};
+        
+        const allKeys = new Set([...Object.keys(historyMap), ...Object.keys(resetMap)]);
+        for (const name of allKeys) {
+            const pts = historyMap[name] ? [...historyMap[name]] : [];
+            const resets = resetMap[name] || [];
+            
+            for (const r of resets) {
+                if (r.reset_time) {
+                    pts.push({
+                        timestamp: r.reset_time,
+                        value: 1.0
+                    });
+                }
+            }
+            
+            pts.sort((a, b) => {
+                const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+                if (diff !== 0) return diff;
+                return a.value - b.value;
+            });
+            
+            mergedHistory[name] = pts;
+        }
+
+        state.history = mergedHistory;
+        renderLegend();
+        drawHistoryChart();
     } catch (error) {
         console.error('History fetch error:', error);
         updateConnectionStatus('offline', 'Offline');
@@ -585,7 +635,11 @@ function drawHistoryChart() {
         const data = pts.map(pt => ({
             timestamp: new Date(pt.timestamp).getTime(),
             value: pt.value
-        })).sort((a, b) => a.timestamp - b.timestamp);
+        })).sort((a, b) => {
+            const diff = a.timestamp - b.timestamp;
+            if (diff !== 0) return diff;
+            return a.value - b.value;
+        });
         
         const projectedPoints = data.map(pt => {
             const x = CHART_MARGIN.left + ((pt.timestamp - tMin) / (tMax - tMin)) * chartWidth;
