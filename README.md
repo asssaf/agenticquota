@@ -171,7 +171,7 @@ The server dynamically loads `app.yaml`, merges `env_variables.yaml` for environ
 ## Integration Testing with dev_appserver.py
 
 ### 1. Prerequisites (Local SDK Installation)
-If you do not have the Google Cloud SDK and App Engine component installed, run our helper installation script to download and install them under `~/host-cache/gcloud`:
+If you do not have Go, the Google Cloud SDK, and the App Engine Go component installed, run our helper installation script to install Go (via apt), configure the Go workspace and cache under `~/host-cache/go`, and download/configure the SDK under `~/host-cache/gcloud`:
 
 ```bash
 ./scripts/dev-setup.sh
