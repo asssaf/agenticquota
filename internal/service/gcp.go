@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"sync"
 	"time"
@@ -43,7 +42,7 @@ func (c *realGCPClient) listTimeSeries(ctx context.Context, req *monitoringpb.Li
 	return list, nil
 }
 
-type gcpQuotaService struct {
+type gcpQuotaStore struct {
 	projectID string
 	client    gcpClient
 
@@ -53,7 +52,7 @@ type gcpQuotaService struct {
 	historyCache7Days *cacheEntry
 }
 
-func (s *gcpQuotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error) {
+func (s *gcpQuotaStore) GetQuota(ctx context.Context) (model.QuotaResponse, error) {
 	if cached, ok := s.getCachedQuota(); ok {
 		return cached, nil
 	}
@@ -106,43 +105,95 @@ func (s *gcpQuotaService) GetQuota(ctx context.Context) (model.QuotaResponse, er
 	return response, nil
 }
 
-func (s *gcpQuotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse) error {
-	// Fetch previous quota first before cache is invalidated/updated
-	prevQuotas, prevTimestamps, err := s.getPreviousQuota(ctx)
-	if err != nil {
-		log.Printf("Could not retrieve previous quota (might be empty/error): %v", err)
+func (s *gcpQuotaStore) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error) {
+	if cached, ok := s.getCachedHistory(days); ok {
+		return cached, nil
 	}
 
+	duration := time.Duration(days) * 24 * time.Hour
+	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction", duration)
+	if err != nil {
+		return model.QuotaHistoryResponse{}, fmt.Errorf("failed to retrieve historical remaining fraction: %w", err)
+	}
+
+	response := model.QuotaHistoryResponse{History: fractions}
+	s.setCachedHistory(days, response)
+
+	return response, nil
+}
+
+func (s *gcpQuotaStore) GetPreviousQuota(ctx context.Context) (map[string]model.QuotaDetails, map[string]time.Time, error) {
+	fractions, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/remaining_fraction")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resets, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_in_seconds")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	times, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_time_epoch")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	quotaMap := make(map[string]model.QuotaDetails)
+	timeMap := make(map[string]time.Time)
+
+	for name, fracPoint := range fractions {
+		fraction, ok := fracPoint.value.(float64)
+		if !ok {
+			continue
+		}
+
+		var resetInSecs int64
+		if val, ok := resets[name].value.(int64); ok {
+			resetInSecs = val
+		}
+
+		var resetTime time.Time
+		if val, ok := times[name].value.(int64); ok {
+			resetTime = time.Unix(val, 0).UTC()
+		}
+
+		quotaMap[name] = model.QuotaDetails{
+			RemainingFraction: fraction,
+			ResetTime:         resetTime,
+			ResetInSeconds:    resetInSecs,
+		}
+		timeMap[name] = fracPoint.timestamp
+	}
+
+	return quotaMap, timeMap, nil
+}
+
+func (s *gcpQuotaStore) SaveResetMetrics(ctx context.Context, resets []QuotaReset) error {
 	s.invalidateCache()
 
-	now := time.Now().UTC()
-
-	// Write reset points if necessary
-	if prevQuotas != nil && prevTimestamps != nil {
-		var resetTimeSeries []*monitoringpb.TimeSeries
-		for name := range quota.Quota {
-			tPrev, okT := prevTimestamps[name]
-			prevDetails, okQ := prevQuotas[name]
-			if okT && okQ {
-				rtPrev := prevDetails.ResetTime
-				if !rtPrev.IsZero() && rtPrev.After(tPrev) && rtPrev.Before(now) {
-					// Reset happened! Generate 100% fraction metric at rtPrev
-					tsReset := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/remaining_fraction", name, 1.0, rtPrev)
-					resetTimeSeries = append(resetTimeSeries, tsReset)
-				}
-			}
-		}
-
-		if len(resetTimeSeries) > 0 {
-			reqReset := &monitoringpb.CreateTimeSeriesRequest{
-				Name:       "projects/" + s.projectID,
-				TimeSeries: resetTimeSeries,
-			}
-			if err := s.client.createTimeSeries(ctx, reqReset); err != nil {
-				log.Printf("Failed to write reset time series: %v", err)
-			}
-		}
+	var resetTimeSeries []*monitoringpb.TimeSeries
+	for _, r := range resets {
+		// Reset happened! Generate 100% fraction metric at r.ResetTime
+		tsReset := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/remaining_fraction", r.Name, 1.0, r.ResetTime)
+		resetTimeSeries = append(resetTimeSeries, tsReset)
 	}
+
+	if len(resetTimeSeries) == 0 {
+		return nil
+	}
+
+	reqReset := &monitoringpb.CreateTimeSeriesRequest{
+		Name:       "projects/" + s.projectID,
+		TimeSeries: resetTimeSeries,
+	}
+	if err := s.client.createTimeSeries(ctx, reqReset); err != nil {
+		return fmt.Errorf("failed to write reset time series: %w", err)
+	}
+	return nil
+}
+
+func (s *gcpQuotaStore) SaveQuotaMetrics(ctx context.Context, quota model.QuotaResponse, now time.Time) error {
+	s.invalidateCache()
 
 	var timeSeries []*monitoringpb.TimeSeries
 
@@ -162,31 +213,14 @@ func (s *gcpQuotaService) SaveQuota(ctx context.Context, quota model.QuotaRespon
 		TimeSeries: timeSeries,
 	}
 
-	err = s.client.createTimeSeries(ctx, req)
+	err := s.client.createTimeSeries(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to write time series to GCP Monitoring: %w", err)
 	}
 	return nil
 }
 
-func (s *gcpQuotaService) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error) {
-	if cached, ok := s.getCachedHistory(days); ok {
-		return cached, nil
-	}
-
-	duration := time.Duration(days) * 24 * time.Hour
-	fractions, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/remaining_fraction", duration)
-	if err != nil {
-		return model.QuotaHistoryResponse{}, fmt.Errorf("failed to retrieve historical remaining fraction: %w", err)
-	}
-
-	response := model.QuotaHistoryResponse{History: fractions}
-	s.setCachedHistory(days, response)
-
-	return response, nil
-}
-
-func (s *gcpQuotaService) listMetric(ctx context.Context, metricType string) (map[string]interface{}, error) {
+func (s *gcpQuotaStore) listMetric(ctx context.Context, metricType string) (map[string]interface{}, error) {
 	now := time.Now()
 	startTime := now.Add(-24 * time.Hour)
 
@@ -237,7 +271,7 @@ type previousPoint struct {
 	timestamp time.Time
 }
 
-func (s *gcpQuotaService) listMetricWithTimestamps(ctx context.Context, metricType string) (map[string]previousPoint, error) {
+func (s *gcpQuotaStore) listMetricWithTimestamps(ctx context.Context, metricType string) (map[string]previousPoint, error) {
 	now := time.Now()
 	startTime := now.Add(-24 * time.Hour)
 
@@ -291,53 +325,7 @@ func (s *gcpQuotaService) listMetricWithTimestamps(ctx context.Context, metricTy
 	return results, nil
 }
 
-func (s *gcpQuotaService) getPreviousQuota(ctx context.Context) (map[string]model.QuotaDetails, map[string]time.Time, error) {
-	fractions, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/remaining_fraction")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resets, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_in_seconds")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	times, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_time_epoch")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	quotaMap := make(map[string]model.QuotaDetails)
-	timeMap := make(map[string]time.Time)
-
-	for name, fracPoint := range fractions {
-		fraction, ok := fracPoint.value.(float64)
-		if !ok {
-			continue
-		}
-
-		var resetInSecs int64
-		if val, ok := resets[name].value.(int64); ok {
-			resetInSecs = val
-		}
-
-		var resetTime time.Time
-		if val, ok := times[name].value.(int64); ok {
-			resetTime = time.Unix(val, 0).UTC()
-		}
-
-		quotaMap[name] = model.QuotaDetails{
-			RemainingFraction: fraction,
-			ResetTime:         resetTime,
-			ResetInSeconds:    resetInSecs,
-		}
-		timeMap[name] = fracPoint.timestamp
-	}
-
-	return quotaMap, timeMap, nil
-}
-
-func (s *gcpQuotaService) listTimeSeriesPoints(ctx context.Context, metricType string, duration time.Duration) (map[string][]model.HistoricalPoint, error) {
+func (s *gcpQuotaStore) listTimeSeriesPoints(ctx context.Context, metricType string, duration time.Duration) (map[string][]model.HistoricalPoint, error) {
 	now := time.Now()
 	startTime := now.Add(-duration)
 
@@ -393,7 +381,7 @@ func (s *gcpQuotaService) listTimeSeriesPoints(ctx context.Context, metricType s
 	return results, nil
 }
 
-func (s *gcpQuotaService) getCachedQuota() (model.QuotaResponse, bool) {
+func (s *gcpQuotaStore) getCachedQuota() (model.QuotaResponse, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -403,7 +391,7 @@ func (s *gcpQuotaService) getCachedQuota() (model.QuotaResponse, bool) {
 	return model.QuotaResponse{}, false
 }
 
-func (s *gcpQuotaService) setCachedQuota(response model.QuotaResponse) {
+func (s *gcpQuotaStore) setCachedQuota(response model.QuotaResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -413,7 +401,7 @@ func (s *gcpQuotaService) setCachedQuota(response model.QuotaResponse) {
 	}
 }
 
-func (s *gcpQuotaService) getCachedHistory(days int) (model.QuotaHistoryResponse, bool) {
+func (s *gcpQuotaStore) getCachedHistory(days int) (model.QuotaHistoryResponse, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -426,7 +414,7 @@ func (s *gcpQuotaService) getCachedHistory(days int) (model.QuotaHistoryResponse
 	return model.QuotaHistoryResponse{}, false
 }
 
-func (s *gcpQuotaService) setCachedHistory(days int, response model.QuotaHistoryResponse) {
+func (s *gcpQuotaStore) setCachedHistory(days int, response model.QuotaHistoryResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -442,7 +430,7 @@ func (s *gcpQuotaService) setCachedHistory(days int, response model.QuotaHistory
 	}
 }
 
-func (s *gcpQuotaService) invalidateCache() {
+func (s *gcpQuotaStore) invalidateCache() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

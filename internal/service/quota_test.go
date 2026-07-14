@@ -80,9 +80,11 @@ func TestQuotaService_GetAndSave(t *testing.T) {
 
 func TestQuotaService_GCP(t *testing.T) {
 	mockCli := &mockGCPClient{}
-	svc := &gcpQuotaService{
-		projectID: "test-project-123",
-		client:    mockCli,
+	svc := &quotaService{
+		store: &gcpQuotaStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
 	}
 
 	// 1. GetQuota when empty -> expect ErrNotFound
@@ -162,9 +164,11 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 		createErr: errors.New("monitoring create failed"),
 		listErr:   errors.New("monitoring list failed"),
 	}
-	svc := &gcpQuotaService{
-		projectID: "test-project-123",
-		client:    mockCli,
+	svc := &quotaService{
+		store: &gcpQuotaStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
 	}
 
 	// 1. SaveQuota error
@@ -190,7 +194,7 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 }
 
 func TestQuotaService_ResetFractionInMemory(t *testing.T) {
-	svc := NewQuotaService().(*inMemoryQuotaService)
+	svc := NewQuotaService().(*quotaService)
 
 	// Save first quota
 	t1 := time.Now().UTC()
@@ -264,9 +268,11 @@ func TestQuotaService_ResetFractionInMemory(t *testing.T) {
 
 func TestQuotaService_ResetFractionGCP(t *testing.T) {
 	mockCli := &mockGCPClient{}
-	svc := &gcpQuotaService{
-		projectID: "test-project-123",
-		client:    mockCli,
+	svc := &quotaService{
+		store: &gcpQuotaStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
 	}
 
 	// Save first quota

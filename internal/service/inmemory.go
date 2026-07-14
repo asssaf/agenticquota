@@ -10,14 +10,14 @@ import (
 	"agenticquota/internal/model"
 )
 
-type inMemoryQuotaService struct {
+type inMemoryQuotaStore struct {
 	mu         sync.RWMutex
 	lastQuota  model.QuotaResponse
 	hasRecords bool
 	history    []historicalRecord
 }
 
-func (s *inMemoryQuotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error) {
+func (s *inMemoryQuotaStore) GetQuota(ctx context.Context) (model.QuotaResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -27,13 +27,30 @@ func (s *inMemoryQuotaService) GetQuota(ctx context.Context) (model.QuotaRespons
 	return s.lastQuota, nil
 }
 
-func (s *inMemoryQuotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *inMemoryQuotaStore) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	now := time.Now().UTC()
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	historyMap := make(map[string][]model.HistoricalPoint)
+	for _, record := range s.history {
+		if record.Timestamp.Before(cutoff) {
+			continue
+		}
+		for name, details := range record.Quota.Quota {
+			historyMap[name] = append(historyMap[name], model.HistoricalPoint{
+				Timestamp: record.Timestamp,
+				Value:     details.RemainingFraction,
+			})
+		}
+	}
+	return model.QuotaHistoryResponse{History: historyMap}, nil
+}
 
-	// Fetch previous quota and timestamps from s.history
+func (s *inMemoryQuotaStore) GetPreviousQuota(ctx context.Context) (map[string]model.QuotaDetails, map[string]time.Time, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	quotaMap := make(map[string]model.QuotaDetails)
 	timeMap := make(map[string]time.Time)
 	for i := len(s.history) - 1; i >= 0; i-- {
@@ -45,31 +62,35 @@ func (s *inMemoryQuotaService) SaveQuota(ctx context.Context, quota model.QuotaR
 			}
 		}
 	}
+	return quotaMap, timeMap, nil
+}
 
-	// Check for resets and insert reset records
-	for name := range quota.Quota {
-		tPrev, okT := timeMap[name]
-		prevDetails, okQ := quotaMap[name]
-		if okT && okQ {
-			rtPrev := prevDetails.ResetTime
-			if !rtPrev.IsZero() && rtPrev.After(tPrev) && rtPrev.Before(now) {
-				// Reset occurred! Insert a reset historicalRecord at rtPrev
-				resetRecord := historicalRecord{
-					Timestamp: rtPrev,
-					Quota: model.QuotaResponse{
-						Quota: map[string]model.QuotaDetails{
-							name: {
-								RemainingFraction: 1.0,
-								ResetTime:         rtPrev,
-								ResetInSeconds:    0,
-							},
-						},
+func (s *inMemoryQuotaStore) SaveResetMetrics(ctx context.Context, resets []QuotaReset) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, r := range resets {
+		// Reset occurred! Insert a reset historicalRecord at r.ResetTime
+		resetRecord := historicalRecord{
+			Timestamp: r.ResetTime,
+			Quota: model.QuotaResponse{
+				Quota: map[string]model.QuotaDetails{
+					r.Name: {
+						RemainingFraction: 1.0,
+						ResetTime:         r.ResetTime,
+						ResetInSeconds:    0,
 					},
-				}
-				s.history = insertHistoricalRecordSorted(s.history, resetRecord)
-			}
+				},
+			},
 		}
+		s.history = insertHistoricalRecordSorted(s.history, resetRecord)
 	}
+	return nil
+}
+
+func (s *inMemoryQuotaStore) SaveQuotaMetrics(ctx context.Context, quota model.QuotaResponse, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	s.lastQuota = quota
 	s.hasRecords = true
@@ -99,28 +120,8 @@ func (s *inMemoryQuotaService) SaveQuota(ctx context.Context, quota model.QuotaR
 	return nil
 }
 
-func (s *inMemoryQuotaService) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
-	historyMap := make(map[string][]model.HistoricalPoint)
-	for _, record := range s.history {
-		if record.Timestamp.Before(cutoff) {
-			continue
-		}
-		for name, details := range record.Quota.Quota {
-			historyMap[name] = append(historyMap[name], model.HistoricalPoint{
-				Timestamp: record.Timestamp,
-				Value:     details.RemainingFraction,
-			})
-		}
-	}
-	return model.QuotaHistoryResponse{History: historyMap}, nil
-}
-
 // seedFakeData populates local in-memory store with mock quotas and histories for demo/dev purposes.
-func (s *inMemoryQuotaService) seedFakeData() {
+func (s *inMemoryQuotaStore) seedFakeData() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
