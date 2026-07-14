@@ -131,23 +131,27 @@ func (s *inMemoryStore) seedFakeData() {
 
 	now := time.Now().UTC()
 
+	proResetNow := getResetTime(now, 5)
+	flashResetNow := getResetTime(now, 8)
+	threePResetNow := getResetTime(now, 5)
+
 	// 1. Set current states
 	s.lastQuota = model.QuotaResponse{
 		Quota: map[string]model.QuotaDetails{
 			"gemini-pro-5h": {
 				RemainingFraction: 0.85,
-				ResetTime:         now.Add(4 * time.Hour),
-				ResetInSeconds:    14400,
+				ResetTime:         proResetNow,
+				ResetInSeconds:    int64(proResetNow.Sub(now).Seconds()),
 			},
 			"gemini-flash-5h": {
 				RemainingFraction: 0.42,
-				ResetTime:         now.Add(2 * time.Hour),
-				ResetInSeconds:    7200,
+				ResetTime:         flashResetNow,
+				ResetInSeconds:    int64(flashResetNow.Sub(now).Seconds()),
 			},
 			"3p-5h": {
 				RemainingFraction: 0.15,
-				ResetTime:         now.Add(1 * time.Hour),
-				ResetInSeconds:    3600,
+				ResetTime:         threePResetNow,
+				ResetInSeconds:    int64(threePResetNow.Sub(now).Seconds()),
 			},
 		},
 	}
@@ -167,27 +171,38 @@ func (s *inMemoryStore) seedFakeData() {
 		// 3p-5h: Linear decline down to critical levels
 		threePVal := 0.80 - float64(24-i)*0.028
 
+		proReset := getResetTime(t, 5)
+		flashReset := getResetTime(t, 8)
+		threePReset := getResetTime(t, 5)
+
 		s.history = append(s.history, historicalRecord{
 			Timestamp: t,
 			Quota: model.QuotaResponse{
 				Quota: map[string]model.QuotaDetails{
 					"gemini-pro-5h": {
 						RemainingFraction: math.Max(0.0, math.Min(1.0, proVal)),
-						ResetTime:         t.Add(4 * time.Hour),
-						ResetInSeconds:    14400,
+						ResetTime:         proReset,
+						ResetInSeconds:    int64(proReset.Sub(t).Seconds()),
 					},
 					"gemini-flash-5h": {
 						RemainingFraction: math.Max(0.0, math.Min(1.0, flashVal)),
-						ResetTime:         t.Add(2 * time.Hour),
-						ResetInSeconds:    7200,
+						ResetTime:         flashReset,
+						ResetInSeconds:    int64(flashReset.Sub(t).Seconds()),
 					},
 					"3p-5h": {
 						RemainingFraction: math.Max(0.0, math.Min(1.0, threePVal)),
-						ResetTime:         t.Add(1 * time.Hour),
-						ResetInSeconds:    3600,
+						ResetTime:         threePReset,
+						ResetInSeconds:    int64(threePReset.Sub(t).Seconds()),
 					},
 				},
 			},
 		})
 	}
+}
+
+// getResetTime calculates a stable reset time based on the timestamp and a period in hours.
+func getResetTime(t time.Time, periodHours int) time.Time {
+	unixHours := t.Unix() / 3600
+	blockIndex := unixHours / int64(periodHours)
+	return time.Unix((blockIndex+1)*int64(periodHours)*3600, 0).UTC()
 }
