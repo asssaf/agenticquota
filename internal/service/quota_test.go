@@ -81,8 +81,8 @@ func TestQuotaService_GetAndSave(t *testing.T) {
 func TestQuotaService_GCP(t *testing.T) {
 	mockCli := &mockGCPClient{}
 	svc := &gcpQuotaService{
-		projectID:  "test-project-123",
-		client:     mockCli,
+		projectID: "test-project-123",
+		client:    mockCli,
 	}
 
 	// 1. GetQuota when empty -> expect ErrNotFound
@@ -163,8 +163,8 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 		listErr:   errors.New("monitoring list failed"),
 	}
 	svc := &gcpQuotaService{
-		projectID:  "test-project-123",
-		client:     mockCli,
+		projectID: "test-project-123",
+		client:    mockCli,
 	}
 
 	// 1. SaveQuota error
@@ -186,5 +186,145 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 	_, err = svc.GetQuota(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "monitoring list failed") {
 		t.Fatalf("expected list error, got %v", err)
+	}
+}
+
+func TestQuotaService_ResetFractionInMemory(t *testing.T) {
+	svc := NewQuotaService().(*inMemoryQuotaService)
+
+	// Save first quota
+	t1 := time.Now().UTC()
+	rtPrev := t1.Add(10 * time.Millisecond)
+
+	mockQuota1 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"test-quota": {
+				RemainingFraction: 0.5,
+				ResetTime:         rtPrev,
+				ResetInSeconds:    10,
+			},
+		},
+	}
+	err := svc.SaveQuota(context.Background(), mockQuota1)
+	if err != nil {
+		t.Fatalf("unexpected error on first save: %v", err)
+	}
+
+	// Sleep to guarantee reset time is passed
+	time.Sleep(20 * time.Millisecond)
+
+	// Save second quota
+	mockQuota2 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"test-quota": {
+				RemainingFraction: 0.7,
+				ResetTime:         time.Now().UTC().Add(10 * time.Second),
+				ResetInSeconds:    10,
+			},
+		},
+	}
+	err = svc.SaveQuota(context.Background(), mockQuota2)
+	if err != nil {
+		t.Fatalf("unexpected error on second save: %v", err)
+	}
+
+	// Get history
+	historyRes, err := svc.GetQuotaHistory(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error on GetQuotaHistory: %v", err)
+	}
+
+	points, ok := historyRes.History["test-quota"]
+	if !ok {
+		t.Fatal("expected test-quota in history")
+	}
+
+	// We expect 3 points:
+	// 1. Initial point (fraction 0.5)
+	// 2. Reset point (fraction 1.0 at rtPrev)
+	// 3. New point (fraction 0.7)
+	if len(points) != 3 {
+		t.Fatalf("expected 3 points in history, got %d: %+v", len(points), points)
+	}
+
+	// Verify the points are sorted and values are correct
+	if points[0].Value != 0.5 {
+		t.Errorf("expected points[0].Value = 0.5, got %f", points[0].Value)
+	}
+	if points[1].Value != 1.0 {
+		t.Errorf("expected points[1].Value = 1.0 (reset), got %f", points[1].Value)
+	}
+	if !points[1].Timestamp.Equal(rtPrev) {
+		t.Errorf("expected points[1].Timestamp = %v, got %v", rtPrev, points[1].Timestamp)
+	}
+	if points[2].Value != 0.7 {
+		t.Errorf("expected points[2].Value = 0.7, got %f", points[2].Value)
+	}
+}
+
+func TestQuotaService_ResetFractionGCP(t *testing.T) {
+	mockCli := &mockGCPClient{}
+	svc := &gcpQuotaService{
+		projectID: "test-project-123",
+		client:    mockCli,
+	}
+
+	// Save first quota
+	t1 := time.Now().UTC().Truncate(time.Second) // GCP time has second precision for reset_time_epoch
+	rtPrev := t1.Add(1 * time.Second)
+
+	mockQuota1 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"test-quota": {
+				RemainingFraction: 0.5,
+				ResetTime:         rtPrev,
+				ResetInSeconds:    1,
+			},
+		},
+	}
+	err := svc.SaveQuota(context.Background(), mockQuota1)
+	if err != nil {
+		t.Fatalf("unexpected error on first save: %v", err)
+	}
+
+	// Sleep 1.5 seconds to ensure the reset time passes
+	time.Sleep(1500 * time.Millisecond)
+
+	// Save second quota
+	mockQuota2 := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"test-quota": {
+				RemainingFraction: 0.7,
+				ResetTime:         time.Now().UTC().Add(10 * time.Second),
+				ResetInSeconds:    10,
+			},
+		},
+	}
+	err = svc.SaveQuota(context.Background(), mockQuota2)
+	if err != nil {
+		t.Fatalf("unexpected error on second save: %v", err)
+	}
+
+	// Let's verify the time series written to mockCli
+	// We expect a reset point with fraction = 1.0 at rtPrev
+	var resetPoint *monitoringpb.TimeSeries
+	for _, ts := range mockCli.timeSeries {
+		if ts.Metric.Type == "custom.googleapis.com/quota/remaining_fraction" && len(ts.Points) > 0 {
+			val := ts.Points[0].Value.GetDoubleValue()
+			if val == 1.0 {
+				resetPoint = ts
+				break
+			}
+		}
+	}
+
+	if resetPoint == nil {
+		t.Fatal("expected a reset metric point (fraction = 1.0) to be written to GCP")
+	}
+
+	// Verify timestamp of reset point matches rtPrev
+	resetTime := resetPoint.Points[0].Interval.EndTime.AsTime().UTC()
+	if !resetTime.Equal(rtPrev) {
+		t.Errorf("expected reset point timestamp %v, got %v", rtPrev, resetTime)
 	}
 }

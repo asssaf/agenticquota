@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -106,9 +107,43 @@ func (s *gcpQuotaService) GetQuota(ctx context.Context) (model.QuotaResponse, er
 }
 
 func (s *gcpQuotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse) error {
+	// Fetch previous quota first before cache is invalidated/updated
+	prevQuotas, prevTimestamps, err := s.getPreviousQuota(ctx)
+	if err != nil {
+		log.Printf("Could not retrieve previous quota (might be empty/error): %v", err)
+	}
+
 	s.invalidateCache()
 
-	now := time.Now()
+	now := time.Now().UTC()
+
+	// Write reset points if necessary
+	if prevQuotas != nil && prevTimestamps != nil {
+		var resetTimeSeries []*monitoringpb.TimeSeries
+		for name := range quota.Quota {
+			tPrev, okT := prevTimestamps[name]
+			prevDetails, okQ := prevQuotas[name]
+			if okT && okQ {
+				rtPrev := prevDetails.ResetTime
+				if !rtPrev.IsZero() && rtPrev.After(tPrev) && rtPrev.Before(now) {
+					// Reset happened! Generate 100% fraction metric at rtPrev
+					tsReset := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/remaining_fraction", name, 1.0, rtPrev)
+					resetTimeSeries = append(resetTimeSeries, tsReset)
+				}
+			}
+		}
+
+		if len(resetTimeSeries) > 0 {
+			reqReset := &monitoringpb.CreateTimeSeriesRequest{
+				Name:       "projects/" + s.projectID,
+				TimeSeries: resetTimeSeries,
+			}
+			if err := s.client.createTimeSeries(ctx, reqReset); err != nil {
+				log.Printf("Failed to write reset time series: %v", err)
+			}
+		}
+	}
+
 	var timeSeries []*monitoringpb.TimeSeries
 
 	for name, details := range quota.Quota {
@@ -127,7 +162,7 @@ func (s *gcpQuotaService) SaveQuota(ctx context.Context, quota model.QuotaRespon
 		TimeSeries: timeSeries,
 	}
 
-	err := s.client.createTimeSeries(ctx, req)
+	err = s.client.createTimeSeries(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to write time series to GCP Monitoring: %w", err)
 	}
@@ -195,6 +230,111 @@ func (s *gcpQuotaService) listMetric(ctx context.Context, metricType string) (ma
 		}
 	}
 	return results, nil
+}
+
+type previousPoint struct {
+	value     interface{}
+	timestamp time.Time
+}
+
+func (s *gcpQuotaService) listMetricWithTimestamps(ctx context.Context, metricType string) (map[string]previousPoint, error) {
+	now := time.Now()
+	startTime := now.Add(-24 * time.Hour)
+
+	req := &monitoringpb.ListTimeSeriesRequest{
+		Name:   "projects/" + s.projectID,
+		Filter: fmt.Sprintf(`metric.type = "%s"`, metricType),
+		Interval: &monitoringpb.TimeInterval{
+			StartTime: timestamppb.New(startTime),
+			EndTime:   timestamppb.New(now),
+		},
+		View: monitoringpb.ListTimeSeriesRequest_FULL,
+	}
+
+	timeSeriesList, err := s.client.listTimeSeries(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(map[string]previousPoint)
+	for _, ts := range timeSeriesList {
+		quotaName := ts.Metric.Labels["quota_name"]
+		if quotaName == "" {
+			continue
+		}
+		if len(ts.Points) == 0 {
+			continue
+		}
+		// Find the latest point by checking the EndTime of the interval
+		latestPoint := ts.Points[0]
+		for _, p := range ts.Points {
+			if p.Interval.EndTime.AsTime().After(latestPoint.Interval.EndTime.AsTime()) {
+				latestPoint = p
+			}
+		}
+
+		var val interface{}
+		switch latestPoint.Value.Value.(type) {
+		case *monitoringpb.TypedValue_DoubleValue:
+			val = latestPoint.Value.GetDoubleValue()
+		case *monitoringpb.TypedValue_Int64Value:
+			val = latestPoint.Value.GetInt64Value()
+		}
+
+		if val != nil {
+			results[quotaName] = previousPoint{
+				value:     val,
+				timestamp: latestPoint.Interval.EndTime.AsTime().UTC(),
+			}
+		}
+	}
+	return results, nil
+}
+
+func (s *gcpQuotaService) getPreviousQuota(ctx context.Context) (map[string]model.QuotaDetails, map[string]time.Time, error) {
+	fractions, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/remaining_fraction")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resets, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_in_seconds")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	times, err := s.listMetricWithTimestamps(ctx, "custom.googleapis.com/quota/reset_time_epoch")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	quotaMap := make(map[string]model.QuotaDetails)
+	timeMap := make(map[string]time.Time)
+
+	for name, fracPoint := range fractions {
+		fraction, ok := fracPoint.value.(float64)
+		if !ok {
+			continue
+		}
+
+		var resetInSecs int64
+		if val, ok := resets[name].value.(int64); ok {
+			resetInSecs = val
+		}
+
+		var resetTime time.Time
+		if val, ok := times[name].value.(int64); ok {
+			resetTime = time.Unix(val, 0).UTC()
+		}
+
+		quotaMap[name] = model.QuotaDetails{
+			RemainingFraction: fraction,
+			ResetTime:         resetTime,
+			ResetInSeconds:    resetInSecs,
+		}
+		timeMap[name] = fracPoint.timestamp
+	}
+
+	return quotaMap, timeMap, nil
 }
 
 func (s *gcpQuotaService) listTimeSeriesPoints(ctx context.Context, metricType string, duration time.Duration) (map[string][]model.HistoricalPoint, error) {

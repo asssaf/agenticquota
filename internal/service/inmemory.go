@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -30,12 +31,52 @@ func (s *inMemoryQuotaService) SaveQuota(ctx context.Context, quota model.QuotaR
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now().UTC()
+
+	// Fetch previous quota and timestamps from s.history
+	quotaMap := make(map[string]model.QuotaDetails)
+	timeMap := make(map[string]time.Time)
+	for i := len(s.history) - 1; i >= 0; i-- {
+		record := s.history[i]
+		for name, details := range record.Quota.Quota {
+			if _, ok := quotaMap[name]; !ok {
+				quotaMap[name] = details
+				timeMap[name] = record.Timestamp
+			}
+		}
+	}
+
+	// Check for resets and insert reset records
+	for name := range quota.Quota {
+		tPrev, okT := timeMap[name]
+		prevDetails, okQ := quotaMap[name]
+		if okT && okQ {
+			rtPrev := prevDetails.ResetTime
+			if !rtPrev.IsZero() && rtPrev.After(tPrev) && rtPrev.Before(now) {
+				// Reset occurred! Insert a reset historicalRecord at rtPrev
+				resetRecord := historicalRecord{
+					Timestamp: rtPrev,
+					Quota: model.QuotaResponse{
+						Quota: map[string]model.QuotaDetails{
+							name: {
+								RemainingFraction: 1.0,
+								ResetTime:         rtPrev,
+								ResetInSeconds:    0,
+							},
+						},
+					},
+				}
+				s.history = insertHistoricalRecordSorted(s.history, resetRecord)
+			}
+		}
+	}
+
 	s.lastQuota = quota
 	s.hasRecords = true
 
 	// Record history in-memory
-	s.history = append(s.history, historicalRecord{
-		Timestamp: time.Now().UTC(),
+	s.history = insertHistoricalRecordSorted(s.history, historicalRecord{
+		Timestamp: now,
 		Quota:     quota,
 	})
 
@@ -46,7 +87,7 @@ func (s *inMemoryQuotaService) SaveQuota(ctx context.Context, quota model.QuotaR
 	}
 
 	// Prune records older than 7 days
-	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	cutoff := now.Add(-7 * 24 * time.Hour)
 	idx := 0
 	for idx < len(s.history) && s.history[idx].Timestamp.Before(cutoff) {
 		idx++
@@ -144,4 +185,14 @@ func (s *inMemoryQuotaService) seedFakeData() {
 			},
 		})
 	}
+}
+
+func insertHistoricalRecordSorted(history []historicalRecord, record historicalRecord) []historicalRecord {
+	idx := sort.Search(len(history), func(i int) bool {
+		return history[i].Timestamp.After(record.Timestamp)
+	})
+	history = append(history, historicalRecord{})
+	copy(history[idx+1:], history[idx:])
+	history[idx] = record
+	return history
 }
