@@ -11,6 +11,13 @@ if ! command -v go &> /dev/null; then
     sudo apt install -y golang
 fi
 
+# Configure Go workspace and build cache to be under ~/host-cache/go
+echo "Configuring Go workspace and cache locations under ~/host-cache/go..."
+mkdir -p "$HOME/host-cache/go"
+go env -w GOPATH="$HOME/host-cache/go"
+go env -w GOCACHE="$HOME/host-cache/go/cache"
+
+
 
 TARGET_DIR="$HOME/host-cache/gcloud"
 SDK_DIR="$TARGET_DIR/google-cloud-sdk"
