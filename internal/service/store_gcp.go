@@ -134,6 +134,28 @@ func (s *gcpStore) GetQuotaHistory(ctx context.Context, days int) (model.QuotaHi
 	return model.QuotaHistoryResponse{History: fractions}, nil
 }
 
+func (s *gcpStore) GetQuotaResetHistory(ctx context.Context, days int) (model.QuotaResetHistoryResponse, error) {
+	duration := time.Duration(days) * 24 * time.Hour
+	pointsMap, err := s.listTimeSeriesPoints(ctx, "custom.googleapis.com/quota/reset_time_epoch", duration)
+	if err != nil {
+		return model.QuotaResetHistoryResponse{}, fmt.Errorf("failed to retrieve historical reset time epoch: %w", err)
+	}
+
+	historyMap := make(map[string][]model.HistoricalResetPoint)
+	for name, points := range pointsMap {
+		var resetPoints []model.HistoricalResetPoint
+		for _, p := range points {
+			resetPoints = append(resetPoints, model.HistoricalResetPoint{
+				Timestamp: p.Timestamp,
+				ResetTime: time.Unix(int64(p.Value), 0).UTC(),
+			})
+		}
+		historyMap[name] = resetPoints
+	}
+
+	return model.QuotaResetHistoryResponse{History: historyMap}, nil
+}
+
 func (s *gcpStore) listMetric(ctx context.Context, metricType string) (map[string]interface{}, error) {
 	now := time.Now()
 	startTime := now.Add(-24 * time.Hour)

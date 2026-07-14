@@ -192,3 +192,79 @@ func TestQuotaService_GCP_Errors(t *testing.T) {
 		t.Fatalf("expected list error, got %v", err)
 	}
 }
+
+func TestQuotaService_GetQuotaResetHistory_Memory(t *testing.T) {
+	svc := NewQuotaService()
+
+	// 1. Save mock quota
+	resetTime := time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC)
+	mockQuota := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.75,
+				ResetTime:         resetTime,
+				ResetInSeconds:    18000,
+			},
+		},
+	}
+	err := svc.SaveQuota(context.Background(), mockQuota)
+	if err != nil {
+		t.Fatalf("unexpected error on save: %v", err)
+	}
+
+	// 2. Fetch reset history
+	res, err := svc.GetQuotaResetHistory(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error on get reset history: %v", err)
+	}
+
+	points, ok := res.History["3p-5h"]
+	if !ok || len(points) == 0 {
+		t.Fatal("expected reset history for key '3p-5h'")
+	}
+
+	if !points[0].ResetTime.Equal(resetTime) {
+		t.Errorf("expected reset time %v, got %v", resetTime, points[0].ResetTime)
+	}
+}
+
+func TestQuotaService_GetQuotaResetHistory_GCP(t *testing.T) {
+	mockCli := &mockGCPClient{}
+	svc := &quotaService{
+		store: &gcpStore{
+			projectID: "test-project-123",
+			client:    mockCli,
+		},
+	}
+
+	// Save historical quota to populate GCP mock client
+	resetTime := time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC)
+	payload := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.85,
+				ResetTime:         resetTime,
+				ResetInSeconds:    17999,
+			},
+		},
+	}
+	err := svc.SaveQuota(context.Background(), payload)
+	if err != nil {
+		t.Fatalf("SaveQuota failed: %v", err)
+	}
+
+	// Fetch reset history
+	res, err := svc.GetQuotaResetHistory(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetQuotaResetHistory failed: %v", err)
+	}
+
+	points, ok := res.History["3p-5h"]
+	if !ok || len(points) == 0 {
+		t.Fatal("expected reset history for key '3p-5h'")
+	}
+
+	if !points[0].ResetTime.Equal(resetTime) {
+		t.Errorf("expected reset time %v, got %v", resetTime, points[0].ResetTime)
+	}
+}

@@ -22,6 +22,7 @@ var ErrNotFound = errors.New("no quota data found")
 type QuotaService interface {
 	GetQuota(ctx context.Context) (model.QuotaResponse, error)
 	GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error)
+	GetQuotaResetHistory(ctx context.Context, days int) (model.QuotaResetHistoryResponse, error)
 	SaveQuota(ctx context.Context, quota model.QuotaResponse) error
 }
 
@@ -31,11 +32,13 @@ type cacheEntry struct {
 }
 
 type quotaService struct {
-	mu                sync.RWMutex
-	store             QuotaStore
-	quotaCache        *cacheEntry
-	historyCache1Day  *cacheEntry
-	historyCache7Days *cacheEntry
+	mu                     sync.RWMutex
+	store                  QuotaStore
+	quotaCache             *cacheEntry
+	historyCache1Day       *cacheEntry
+	historyCache7Days      *cacheEntry
+	resetHistoryCache1Day  *cacheEntry
+	resetHistoryCache7Days *cacheEntry
 }
 
 // NewQuotaService creates a new instance of QuotaService.
@@ -113,6 +116,21 @@ func (s *quotaService) GetQuotaHistory(ctx context.Context, days int) (model.Quo
 	return response, nil
 }
 
+// GetQuotaResetHistory retrieves the 24-hour or 7-day historical reset time series for all quotas.
+func (s *quotaService) GetQuotaResetHistory(ctx context.Context, days int) (model.QuotaResetHistoryResponse, error) {
+	if cached, ok := s.getCachedResetHistory(days); ok {
+		return cached, nil
+	}
+
+	response, err := s.store.GetQuotaResetHistory(ctx, days)
+	if err != nil {
+		return model.QuotaResetHistoryResponse{}, err
+	}
+
+	s.setCachedResetHistory(days, response)
+	return response, nil
+}
+
 func (s *quotaService) getCachedQuota() (model.QuotaResponse, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -162,6 +180,35 @@ func (s *quotaService) setCachedHistory(days int, response model.QuotaHistoryRes
 	}
 }
 
+func (s *quotaService) getCachedResetHistory(days int) (model.QuotaResetHistoryResponse, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if days == 1 && s.resetHistoryCache1Day != nil && time.Now().Before(s.resetHistoryCache1Day.expiration) {
+		return s.resetHistoryCache1Day.data.(model.QuotaResetHistoryResponse), true
+	}
+	if days == 7 && s.resetHistoryCache7Days != nil && time.Now().Before(s.resetHistoryCache7Days.expiration) {
+		return s.resetHistoryCache7Days.data.(model.QuotaResetHistoryResponse), true
+	}
+	return model.QuotaResetHistoryResponse{}, false
+}
+
+func (s *quotaService) setCachedResetHistory(days int, response model.QuotaResetHistoryResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry := &cacheEntry{
+		data:       response,
+		expiration: time.Now().Add(30 * time.Second),
+	}
+
+	if days == 1 {
+		s.resetHistoryCache1Day = entry
+	} else if days == 7 {
+		s.resetHistoryCache7Days = entry
+	}
+}
+
 func (s *quotaService) invalidateCache() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -169,4 +216,6 @@ func (s *quotaService) invalidateCache() {
 	s.quotaCache = nil
 	s.historyCache1Day = nil
 	s.historyCache7Days = nil
+	s.resetHistoryCache1Day = nil
+	s.resetHistoryCache7Days = nil
 }

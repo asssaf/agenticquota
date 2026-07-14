@@ -10,4 +10,5 @@ type QuotaStore interface {
 	GetQuota(ctx context.Context) (model.QuotaResponse, error)
 	SaveQuota(ctx context.Context, quota model.QuotaResponse) error
 	GetQuotaHistory(ctx context.Context, days int) (model.QuotaHistoryResponse, error)
+	GetQuotaResetHistory(ctx context.Context, days int) (model.QuotaResetHistoryResponse, error)
 }

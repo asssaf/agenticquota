@@ -148,3 +148,39 @@ func (h *QuotaHandler) HandleQuotaHistory(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
+
+// HandleQuotaResetHistory routes and processes GET requests for /api/v1/quota/history/reset.
+func (h *QuotaHandler) HandleQuotaResetHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	days := 1
+	daysStr := r.URL.Query().Get("days")
+	if daysStr != "" {
+		if val, err := strconv.Atoi(daysStr); err == nil && (val == 1 || val == 7) {
+			days = val
+		}
+	}
+
+	response, err := h.service.GetQuotaResetHistory(r.Context(), days)
+	if err != nil {
+		log.Printf("Error retrieving quota reset history: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "failed to retrieve quota reset history",
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
