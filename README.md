@@ -98,6 +98,18 @@ curl -i -H "X-API-Key: your-secret-api-key" http://localhost:8080/api/v1/quota
 # Expected Output: 200 OK with the POSTed JSON payload
 ```
 
+#### F. Fetch Quota History (Authenticated - 200 OK)
+```bash
+curl -i -H "X-API-Key: your-secret-api-key" "http://localhost:8080/api/v1/quota/history?days=1"
+# Expected Output: 200 OK with utilization history points
+```
+
+#### G. Fetch Quota Reset Time History (Authenticated - 200 OK)
+```bash
+curl -i -H "X-API-Key: your-secret-api-key" "http://localhost:8080/api/v1/quota/history/reset?days=1"
+# Expected Output: 200 OK with reset time history points
+```
+
 ---
 
 ## Deployment to Google App Engine

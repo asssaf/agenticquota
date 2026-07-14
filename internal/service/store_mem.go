@@ -91,6 +91,26 @@ func (s *inMemoryStore) GetQuotaHistory(ctx context.Context, days int) (model.Qu
 	return model.QuotaHistoryResponse{History: historyMap}, nil
 }
 
+func (s *inMemoryStore) GetQuotaResetHistory(ctx context.Context, days int) (model.QuotaResetHistoryResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	historyMap := make(map[string][]model.HistoricalResetPoint)
+	for _, record := range s.history {
+		if record.Timestamp.Before(cutoff) {
+			continue
+		}
+		for name, details := range record.Quota.Quota {
+			historyMap[name] = append(historyMap[name], model.HistoricalResetPoint{
+				Timestamp: record.Timestamp,
+				ResetTime: details.ResetTime,
+			})
+		}
+	}
+	return model.QuotaResetHistoryResponse{History: historyMap}, nil
+}
+
 // seedFakeData populates local in-memory store with mock quotas and histories for demo/dev purposes.
 func (s *inMemoryStore) seedFakeData() {
 	s.mu.Lock()

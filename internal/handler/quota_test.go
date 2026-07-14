@@ -233,3 +233,66 @@ func TestQuotaHandler_GetQuotaHistory_Success(t *testing.T) {
 		t.Errorf("expected status 200 OK for history (days=7), got: %d", rrGet7.Code)
 	}
 }
+
+func TestQuotaHandler_GetQuotaResetHistory_Success(t *testing.T) {
+	t.Setenv("QUOTA_API_KEY", "testkey")
+	svc := service.NewQuotaService()
+	h := NewQuotaHandler(svc)
+
+	// 1. Post a quota payload to populate history
+	resetTime := time.Date(2026, 7, 8, 10, 0, 52, 0, time.UTC)
+	payload := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 0.9,
+				ResetTime:         resetTime,
+				ResetInSeconds:    7200,
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqPost, err := http.NewRequest("POST", "/api/v1/quota", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqPost.Header.Set("X-API-Key", "testkey")
+	reqPost.Header.Set("Content-Type", "application/json")
+
+	rrPost := httptest.NewRecorder()
+	h.HandleQuota(rrPost, reqPost)
+
+	if rrPost.Code != http.StatusOK {
+		t.Errorf("expected POST status 200 OK, got: %d", rrPost.Code)
+	}
+
+	// 2. Fetch reset history with default timeframe (days=1)
+	reqGet1, err := http.NewRequest("GET", "/api/v1/quota/history/reset?days=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqGet1.Header.Set("X-API-Key", "testkey")
+
+	rrGet1 := httptest.NewRecorder()
+	h.HandleQuotaResetHistory(rrGet1, reqGet1)
+
+	if rrGet1.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK for reset history (days=1), got: %d", rrGet1.Code)
+	}
+
+	var resp1 model.QuotaResetHistoryResponse
+	if err := json.NewDecoder(rrGet1.Body).Decode(&resp1); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+
+	points1, ok := resp1.History["3p-5h"]
+	if !ok || len(points1) == 0 {
+		t.Fatal("expected reset history data for key '3p-5h'")
+	}
+	if !points1[0].ResetTime.Equal(resetTime) {
+		t.Errorf("expected reset time %v, got: %v", resetTime, points1[0].ResetTime)
+	}
+}

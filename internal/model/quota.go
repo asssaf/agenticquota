@@ -24,3 +24,14 @@ type HistoricalPoint struct {
 type QuotaHistoryResponse struct {
 	History map[string][]HistoricalPoint `json:"history"`
 }
+
+// HistoricalResetPoint represents a single historical reset time point in time.
+type HistoricalResetPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	ResetTime time.Time `json:"reset_time"`
+}
+
+// QuotaResetHistoryResponse represents the historical reset times API response.
+type QuotaResetHistoryResponse struct {
+	History map[string][]HistoricalResetPoint `json:"history"`
+}
