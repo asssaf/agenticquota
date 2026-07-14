@@ -931,11 +931,15 @@ body {
     fill: #141124;
     stroke-width: 1.5;
     cursor: pointer;
-    transition: r 0.15s ease-in-out;
+    transition: r 0.15s ease-in-out, fill 0.15s ease-in-out;
 }
 
 .chart-data-point:hover {
     r: 4;
+}
+
+.chart-data-point.chart-reset-point:hover {
+    r: 6.5;
 }
 
 /* Loader & Empty states inside chart card */

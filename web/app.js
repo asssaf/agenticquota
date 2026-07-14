@@ -349,7 +349,8 @@ async function fetchHistoryData(isManual = false) {
                 if (r.reset_time) {
                     pts.push({
                         timestamp: r.reset_time,
-                        value: 1.0
+                        value: 1.0,
+                        isReset: true
                     });
                 }
             }
@@ -634,18 +635,21 @@ function drawHistoryChart() {
         
         const data = pts.map(pt => ({
             timestamp: new Date(pt.timestamp).getTime(),
-            value: pt.value
+            value: pt.value,
+            isReset: pt.isReset
         })).sort((a, b) => {
             const diff = a.timestamp - b.timestamp;
             if (diff !== 0) return diff;
             return a.value - b.value;
         });
         
-        const projectedPoints = data.map(pt => {
-            const x = CHART_MARGIN.left + ((pt.timestamp - tMin) / (tMax - tMin)) * chartWidth;
-            const y = CHART_MARGIN.top + (1 - pt.value) * chartHeight;
-            return { x, y, timestamp: pt.timestamp, value: pt.value };
-        });
+        const projectedPoints = data
+            .filter(pt => pt.timestamp <= tMax)
+            .map(pt => {
+                const x = CHART_MARGIN.left + ((pt.timestamp - tMin) / (tMax - tMin)) * chartWidth;
+                const y = CHART_MARGIN.top + (1 - pt.value) * chartHeight;
+                return { x, y, timestamp: pt.timestamp, value: pt.value, isReset: pt.isReset };
+            });
         
         seriesProjectedData[name] = projectedPoints;
         
@@ -676,9 +680,17 @@ function drawHistoryChart() {
             const circle = document.createElementNS(svgNamespace, "circle");
             circle.setAttribute("cx", pt.x);
             circle.setAttribute("cy", pt.y);
-            circle.setAttribute("r", "2.2");
-            circle.setAttribute("class", "chart-data-point");
             circle.setAttribute("stroke", color);
+            if (pt.isReset) {
+                circle.setAttribute("r", "5.0");
+                circle.setAttribute("class", "chart-data-point chart-reset-point");
+                circle.style.setProperty('fill', color, 'important');
+                circle.style.setProperty('stroke', '#ffffff', 'important');
+                circle.style.setProperty('stroke-width', '2', 'important');
+            } else {
+                circle.setAttribute("r", "2.2");
+                circle.setAttribute("class", "chart-data-point");
+            }
             svg.appendChild(circle);
         });
     });
@@ -784,11 +796,12 @@ function drawHistoryChart() {
             dot.setAttribute("stroke-width", "2");
             trackerGroup.appendChild(dot);
             
+            const labelSuffix = item.pt.isReset ? " (Reset)" : "";
             tooltipValuesHTML += `
                 <div class="chart-tooltip-value">
                     <span class="chart-tooltip-marker" style="background: ${color}"></span>
                     <span style="color: var(--text-secondary); margin-right: 0.5rem;">${item.name}:</span>
-                    <strong>${(item.pt.value * 100).toFixed(1)}%</strong>
+                    <strong>${(item.pt.value * 100).toFixed(1)}%${labelSuffix}</strong>
                 </div>
             `;
         });
