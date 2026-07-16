@@ -14,6 +14,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -165,7 +166,8 @@ func (s *gcpStore) GetQuotaResetHistory(ctx context.Context, days int) (model.Qu
 
 func (s *gcpStore) listMetric(ctx context.Context, metricType string) (map[string]interface{}, error) {
 	now := time.Now()
-	startTime := now.Add(-24 * time.Hour)
+	// Fetch the latest quota data within the last 7 days.
+	startTime := now.Add(-7 * 24 * time.Hour)
 
 	req := &monitoringpb.ListTimeSeriesRequest{
 		Name:   "projects/" + s.projectID,
@@ -173,6 +175,10 @@ func (s *gcpStore) listMetric(ctx context.Context, metricType string) (map[strin
 		Interval: &monitoringpb.TimeInterval{
 			StartTime: timestamppb.New(startTime),
 			EndTime:   timestamppb.New(now),
+		},
+		Aggregation: &monitoringpb.Aggregation{
+			AlignmentPeriod:  durationpb.New(7 * 24 * time.Hour),
+			PerSeriesAligner: monitoringpb.Aggregation_ALIGN_NEXT_OLDER,
 		},
 		View: monitoringpb.ListTimeSeriesRequest_FULL,
 	}
