@@ -9,3 +9,9 @@ server
 *.exe
 *.test
 *.prof
+
+# Elm local build directories
+elm-stuff/
+web/app.js
+
+

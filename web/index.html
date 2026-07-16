@@ -15,145 +15,54 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="bg-glow"></div>
+    <div id="elm-app"></div>
     
-    <header class="dashboard-header">
-        <div class="header-container">
-            <div class="logo-group">
-                <span class="logo-icon">▲</span>
-                <div class="title-meta">
-                    <h1>Antigravity Quota</h1>
-                    <p class="subtitle">Agent Resource Telemetry</p>
-                </div>
-            </div>
-            <nav class="dashboard-nav">
-                <button id="tab-active" class="nav-tab active" data-tab="active">Overview</button>
-                <button id="tab-history" class="nav-tab" data-tab="history">History Graphs</button>
-            </nav>
-            <div class="header-controls">
-                <div class="status-indicator-group">
-                    <span id="conn-indicator" class="status-dot status-offline"></span>
-                    <span id="conn-text" class="status-text">Disconnected</span>
-                </div>
-                <button id="settings-btn" class="icon-btn" title="API Configuration" aria-label="Settings">
-                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                </button>
-                <button id="refresh-btn" class="primary-btn" title="Refresh metrics" aria-label="Refresh">
-                    <svg id="refresh-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    <span>Refresh</span>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <main class="dashboard-main">
-        <!-- Error / Info Banners -->
-        <div id="alert-banner" class="banner hidden">
-            <span class="banner-icon">ℹ</span>
-            <span id="alert-msg" class="banner-text">Loading...</span>
-        </div>
-
-        <!-- Tab 1: Overview Grid -->
-        <section id="view-active" class="view-section">
-            <!-- Dashboard Setup / Empty State -->
-            <div id="empty-state" class="empty-state hidden">
-                <div class="empty-icon">📭</div>
-                <h2>No Quota Data Logged</h2>
-                <p>This service hasn't received any quota updates yet. Log quota updates by sending a POST request or setting up your Antigravity CLI statusline integration.</p>
-                <div class="integration-guide">
-                    <h3>Quick Integration</h3>
-                    <p>Run the statusline script to report your local Antigravity metrics automatically:</p>
-                    <pre><code>curl -X POST \
-  -H "X-API-Key: &lt;YOUR_API_KEY&gt;" \
-  -H "Content-Type: application/json" \
-  -d '{"quota":{"gemini-flash":{"remaining_fraction":0.85,"reset_in_seconds":3600}}}' \
-  /api/v1/quota</code></pre>
-                </div>
-            </div>
-
-            <div id="quota-grid" class="quota-grid">
-                <div class="loading-cards">
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tab 2: History Graph View -->
-        <section id="view-history" class="view-section hidden">
-            <div class="history-view-card">
-                <div class="history-view-header">
-                    <div class="history-title-group">
-                        <h2>Utilization History</h2>
-                        <div class="timeframe-toggle" id="timeframe-toggle">
-                            <button class="time-toggle-btn active" data-days="1" id="btn-tf-24h">24h</button>
-                            <button class="time-toggle-btn" data-days="7" id="btn-tf-7d">7d</button>
-                        </div>
-                    </div>
-                    <div id="chart-legend" class="chart-legend-container">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-                <div class="chart-content">
-                    <div id="chart-loading" class="chart-loading-state hidden">
-                        <div class="loading-spinner"></div>
-                        <p>Fetching history metrics...</p>
-                    </div>
-                    <div id="chart-empty" class="chart-empty-state">
-                        <p>No history points logged for this quota name in the last 24h.</p>
-                    </div>
-                    <div id="chart-container" class="chart-container">
-                        <!-- SVG injects here -->
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- API Settings Modal -->
-    <div id="settings-modal" class="modal hidden">
-        <div class="modal-overlay" id="modal-overlay"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>API Configuration</h2>
-                <button id="close-modal-btn" class="close-btn" aria-label="Close modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="settings-form">
-                    <div class="form-group">
-                        <label for="api-key-input">X-API-Key</label>
-                        <input type="password" id="api-key-input" placeholder="Enter your secret API key..." required autocomplete="off">
-                        <small class="form-help">Enter the key configured via <code>QUOTA_API_KEY</code> on your server (defaults to <code>default-secret-key</code> locally).</small>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="save-key-checkbox" checked>
-                        <label for="save-key-checkbox">Remember API key in this browser</label>
-                    </div>
-                    <button type="submit" id="save-settings-btn" class="submit-btn">Save & Connect</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <footer class="dashboard-footer">
-        <div class="footer-container">
-            <p>&copy; 2026 Antigravity Quota Monitor. All rights reserved.</p>
-            <div class="footer-links">
-                <span class="auto-refresh-control">
-                    <label for="auto-refresh-select">Auto-refresh:</label>
-                    <select id="auto-refresh-select">
-                        <option value="10">Every 10s</option>
-                        <option value="30" selected>Every 30s</option>
-                        <option value="60">Every 1m</option>
-                        <option value="0">Disabled</option>
-                    </select>
-                </span>
-            </div>
-        </div>
-    </footer>
-
     <!-- Application Script -->
     <script src="/app.js"></script>
+    <script>
+        const app = Elm.Main.init({
+            node: document.getElementById('elm-app'),
+            flags: {
+                apiKey: localStorage.getItem('agentic_quota_api_key') || '',
+                autoRefresh: parseInt(localStorage.getItem('agentic_quota_refresh') || '30')
+            }
+        });
+
+        app.ports.saveApiKey.subscribe(function(data) {
+            if (data.key) {
+                localStorage.setItem('agentic_quota_api_key', data.key);
+            } else {
+                localStorage.removeItem('agentic_quota_api_key');
+            }
+        });
+
+        app.ports.saveAutoRefresh.subscribe(function(val) {
+            localStorage.setItem('agentic_quota_refresh', val.toString());
+        });
+
+        let isHovering = false;
+        document.body.addEventListener('mousemove', function(e) {
+            const svg = e.target.closest('.chart-svg');
+            if (svg) {
+                const rect = svg.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const svgX = (mouseX / rect.width) * 800;
+                isHovering = true;
+                app.ports.onChartMouseMove.send(svgX);
+            } else {
+                if (isHovering) {
+                    isHovering = false;
+                    app.ports.onChartMouseLeave.send(null);
+                }
+            }
+        });
+
+        document.body.addEventListener('mouseleave', function(e) {
+            if (isHovering) {
+                isHovering = false;
+                app.ports.onChartMouseLeave.send(null);
+            }
+        });
+    </script>
 </body>
 </html>
