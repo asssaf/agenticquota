@@ -53,24 +53,24 @@
             <span id="alert-msg" class="banner-text">Loading...</span>
         </div>
 
-        <!-- Dashboard Setup / Empty State -->
-        <div id="empty-state" class="empty-state hidden">
-            <div class="empty-icon">📭</div>
-            <h2>No Quota Data Logged</h2>
-            <p>This service hasn't received any quota updates yet. Log quota updates by sending a POST request or setting up your Antigravity CLI statusline integration.</p>
-            <div class="integration-guide">
-                <h3>Quick Integration</h3>
-                <p>Run the statusline script to report your local Antigravity metrics automatically:</p>
-                <pre><code>curl -X POST \
+        <!-- Tab 1: Overview Grid -->
+        <section id="view-active" class="view-section">
+            <!-- Dashboard Setup / Empty State -->
+            <div id="empty-state" class="empty-state hidden">
+                <div class="empty-icon">📭</div>
+                <h2>No Quota Data Logged</h2>
+                <p>This service hasn't received any quota updates yet. Log quota updates by sending a POST request or setting up your Antigravity CLI statusline integration.</p>
+                <div class="integration-guide">
+                    <h3>Quick Integration</h3>
+                    <p>Run the statusline script to report your local Antigravity metrics automatically:</p>
+                    <pre><code>curl -X POST \
   -H "X-API-Key: &lt;YOUR_API_KEY&gt;" \
   -H "Content-Type: application/json" \
   -d '{"quota":{"gemini-flash":{"remaining_fraction":0.85,"reset_in_seconds":3600}}}' \
   /api/v1/quota</code></pre>
+                </div>
             </div>
-        </div>
 
-        <!-- Tab 1: Overview Grid -->
-        <section id="view-active" class="view-section">
             <div id="quota-grid" class="quota-grid">
                 <div class="loading-cards">
                     <div class="skeleton-card"></div>

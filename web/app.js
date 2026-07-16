@@ -155,12 +155,16 @@ function switchTab(tabId) {
         elements.tabHistory.classList.remove('active');
         elements.viewActive.classList.remove('hidden');
         elements.viewHistory.classList.add('hidden');
+        if (!state.quotas || Object.keys(state.quotas).length === 0) {
+            elements.emptyState.classList.remove('hidden');
+        }
         fetchQuotaData();
     } else {
         elements.tabActive.classList.remove('active');
         elements.tabHistory.classList.add('active');
         elements.viewActive.classList.add('hidden');
         elements.viewHistory.classList.remove('hidden');
+        elements.emptyState.classList.add('hidden');
         fetchHistoryData();
     }
 }
