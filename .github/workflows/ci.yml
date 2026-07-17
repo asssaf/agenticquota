@@ -24,5 +24,22 @@ jobs:
           go fmt ./...
           go vet ./...
 
+      - name: Install Elm
+        run: |
+          curl -L -o elm.gz "https://github.com/elm/compiler/releases/download/0.19.1/binary-for-linux-64-bit.gz"
+          gunzip elm.gz
+          chmod +x elm
+          sudo mv elm /usr/local/bin/elm
+
+      - name: Compile Elm Frontend
+        run: elm make src/Main.elm --output=web/app.js --optimize
+
+      - name: Upload compiled Frontend JS Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2, verified via git ls-remote
+        with:
+          name: app-js
+          path: web/app.js
+
       - name: Run Tests
         run: go test -v ./...
+

@@ -9,7 +9,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 - **GAE Standard Ready**: Optimized for fast startup, automatic scaling, and configuration via `app.yaml`.
 - **API Key Authentication**: Protected by an `X-API-Key` header check.
 - **GCP Cloud Monitoring Integration**: Reports and retrieves quota metrics (remaining fraction, reset in seconds, reset time epoch) to Google Cloud Monitoring when the service is run with a configured Google Cloud project, falling back to a thread-safe in-memory store. Read queries are optimized with a short-term (30s) in-memory cache to prevent exceeding API free tier limits, with immediate invalidation on new writes.
-- **Interactive Quota Dashboard**: A premium, lightweight web interface served at `/` featuring live countdowns, circular status gauges, and local settings memory.
+- **Interactive Quota Dashboard**: A premium, lightweight web interface written in Elm (compiled to `web/app.js`) served at `/` featuring live countdowns, circular status gauges, local settings memory, and interactive history SVG graphs.
 
 ---
 
@@ -26,7 +26,14 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 │   │   └── quota.go      # JSON schema structures
 │   └── service/
 │       └── quota.go      # GCP Monitoring reporting and retrieval with fallback store
+├── src/
+│   └── Main.elm          # Elm frontend source code
+├── web/
+│   ├── app.js            # Compiled Elm application JavaScript
+│   ├── index.html        # Dashboard entry HTML
+│   └── style.css         # Styling stylesheet
 ├── app.yaml              # GAE deployment configuration
+├── elm.json              # Elm package definition
 ├── go.mod                # Go module definition
 └── README.md             # This file
 ```
@@ -37,6 +44,7 @@ A lightweight Go service designed to run in the Google App Engine (GAE) Standard
 
 ### 1. Prerequisites
 - [Go 1.25+](https://go.dev/doc/install) installed locally.
+- [Elm 0.19.1](https://elm-lang.org/) installed locally (or set up via the dev setup script).
 
 ### 2. Run the Server
 Set the API key environment variable and start the application:
@@ -108,6 +116,16 @@ curl -i -H "X-API-Key: your-secret-api-key" "http://localhost:8080/api/v1/quota/
 ```bash
 curl -i -H "X-API-Key: your-secret-api-key" "http://localhost:8080/api/v1/quota/history/reset?days=1"
 # Expected Output: 200 OK with reset time history points
+```
+
+#### H. Compiling Elm Frontend
+The frontend dashboard is developed using Elm (located in [src/Main.elm](file:///home/user/work/src/Main.elm)). To compile the Elm source code into the production asset, run the following:
+```bash
+# If using the developer setup script installation:
+~/host-cache/elm/elm make src/Main.elm --output=web/app.js --optimize
+
+# If elm is available in your PATH:
+elm make src/Main.elm --output=web/app.js --optimize
 ```
 
 ---

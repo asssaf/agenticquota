@@ -66,3 +66,23 @@ echo "--------------------------------------------------------"
 
 # Avoid "Compute Engine Metadata server unavailable"
 export GOOGLE_APPLICATION_CREDENTIALS=/dev/null
+
+# Install Elm if not already installed
+ELM_DIR="$HOME/host-cache/elm"
+ELM_BIN="$ELM_DIR/elm"
+
+echo "Setting up Elm under $ELM_DIR..."
+mkdir -p "$ELM_DIR"
+
+if [ -f "$ELM_BIN" ] && [ -x "$ELM_BIN" ]; then
+    echo "Elm is already installed at $ELM_BIN."
+else
+    echo "Downloading Elm..."
+    # Download official Elm binary for linux-64-bit
+    curl -L -o "$ELM_DIR/elm.gz" "https://github.com/elm/compiler/releases/download/0.19.1/binary-for-linux-64-bit.gz"
+    echo "Decompressing Elm..."
+    gunzip -f "$ELM_DIR/elm.gz"
+    chmod +x "$ELM_BIN"
+    echo "Elm installed successfully at $ELM_BIN"
+fi
+
