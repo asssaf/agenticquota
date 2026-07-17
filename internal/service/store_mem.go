@@ -153,6 +153,11 @@ func (s *inMemoryStore) seedFakeData() {
 				ResetTime:         threePResetNow,
 				ResetInSeconds:    int64(threePResetNow.Sub(now).Seconds()),
 			},
+			"stale-demo-5h": {
+				RemainingFraction: 0.35,
+				ResetTime:         now.Add(-10 * time.Minute),
+				ResetInSeconds:    -600,
+			},
 		},
 	}
 	s.hasRecords = true
@@ -193,6 +198,11 @@ func (s *inMemoryStore) seedFakeData() {
 						RemainingFraction: math.Max(0.0, math.Min(1.0, threePVal)),
 						ResetTime:         threePReset,
 						ResetInSeconds:    int64(threePReset.Sub(t).Seconds()),
+					},
+					"stale-demo-5h": {
+						RemainingFraction: 0.35,
+						ResetTime:         t.Add(-10 * time.Minute),
+						ResetInSeconds:    -600,
 					},
 				},
 			},

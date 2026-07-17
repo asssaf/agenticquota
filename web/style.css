@@ -13,6 +13,8 @@
     --color-warning-rgb: 241, 196, 15;
     --color-danger: #ff007f;      /* Neon Magenta/Pink */
     --color-danger-rgb: 255, 0, 127;
+    --color-stale: #64748b;       /* Slate Gray */
+    --color-stale-rgb: 100, 116, 139;
     
     --text-primary: #ffffff;
     --text-secondary: #a0aec0;
@@ -300,6 +302,7 @@ body {
 .quota-card.state-safe::before { background: var(--color-safe); }
 .quota-card.state-warning::before { background: var(--color-warning); }
 .quota-card.state-danger::before { background: var(--color-danger); }
+.quota-card.state-stale::before { background: var(--color-stale); }
 
 .quota-card.state-safe:hover {
     box-shadow: 0 12px 40px rgba(0, 242, 254, 0.12);
@@ -309,6 +312,9 @@ body {
 }
 .quota-card.state-danger:hover {
     box-shadow: 0 12px 40px rgba(255, 0, 127, 0.12);
+}
+.quota-card.state-stale:hover {
+    box-shadow: 0 12px 40px rgba(100, 116, 139, 0.12);
 }
 
 /* Card Header */
@@ -350,6 +356,11 @@ body {
     color: var(--color-danger);
     border: 1px solid rgba(255, 0, 127, 0.2);
 }
+.state-stale .card-badge {
+    background: rgba(100, 116, 139, 0.1);
+    color: var(--color-stale);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+}
 
 /* Circular Gauge */
 .card-gauge-wrapper {
@@ -388,6 +399,10 @@ body {
 .state-danger .gauge-value {
     stroke: var(--color-danger);
     filter: drop-shadow(0 0 6px rgba(255, 0, 127, 0.6));
+}
+.state-stale .gauge-value {
+    stroke: var(--color-stale);
+    filter: drop-shadow(0 0 6px rgba(100, 116, 139, 0.6));
 }
 
 .gauge-percentage {
@@ -442,6 +457,9 @@ body {
 
 .state-danger .detail-value.countdown {
     color: var(--color-danger);
+}
+.state-stale .detail-value.countdown {
+    color: var(--color-stale);
 }
 
 /* Empty State Styling */
