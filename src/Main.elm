@@ -644,17 +644,6 @@ getQuotaState fraction =
 renderQuotaCard : Time.Zone -> Time.Posix -> Time.Posix -> ( String, Quota ) -> Html Msg
 renderQuotaCard zone now fetchTime ( name, q ) =
     let
-        cardState =
-            getQuotaState q.remainingFraction
-
-        percentText =
-            String.fromFloat (roundFloat (q.remainingFraction * 100) 1) ++ "%"
-
-        -- Gauge calculations
-        radius = 50
-        circumference = 2 * pi * radius
-        strokeDashoffset = circumference * (1 - q.remainingFraction)
-
         -- Parse reset time
         parsedResetResult = Iso8601.toTime q.resetTime
         
@@ -675,39 +664,6 @@ renderQuotaCard zone now fetchTime ( name, q ) =
                     else
                         Nothing
 
-        formattedReset =
-            case targetTime of
-                Just posix ->
-                    formatPosix zone posix
-
-                Nothing ->
-                    "Never"
-
-        -- Countdown calculation
-        countdownText =
-            case targetTime of
-                Just target ->
-                    let
-                        diffMs = Time.posixToMillis target - Time.posixToMillis now
-                    in
-                    if diffMs <= 0 then
-                        "00:00:00"
-                    else
-                        let
-                            diffSecs = diffMs // 1000
-                            hours = diffSecs // 3600
-                            minutes = remainderBy 3600 diffSecs // 60
-                            seconds = remainderBy 60 diffSecs
-                            pad num = String.padLeft 2 '0' (String.fromInt num)
-                        in
-                        if hours > 24 then
-                            String.fromInt (hours // 24) ++ "d " ++ pad (remainderBy 24 hours) ++ "h " ++ pad minutes ++ "m"
-                        else
-                            pad hours ++ ":" ++ pad minutes ++ ":" ++ pad seconds
-
-                Nothing ->
-                    "Never"
-
         isExpired =
             case targetTime of
                 Just target ->
@@ -715,6 +671,68 @@ renderQuotaCard zone now fetchTime ( name, q ) =
 
                 Nothing ->
                     False
+
+        cardState =
+            if isExpired then
+                "stale"
+            else
+                getQuotaState q.remainingFraction
+
+        remainingFraction =
+            if isExpired then
+                1.0
+            else
+                q.remainingFraction
+
+        percentText =
+            if isExpired then
+                "~100%"
+            else
+                String.fromFloat (roundFloat (q.remainingFraction * 100) 1) ++ "%"
+
+        -- Gauge calculations
+        radius = 50
+        circumference = 2 * pi * radius
+        strokeDashoffset = circumference * (1 - remainingFraction)
+
+        formattedReset =
+            if isExpired then
+                "Unknown"
+            else
+                case targetTime of
+                    Just posix ->
+                        formatPosix zone posix
+
+                    Nothing ->
+                        "Never"
+
+        -- Countdown calculation
+        countdownText =
+            if isExpired then
+                "--:--:--"
+            else
+                case targetTime of
+                    Just target ->
+                        let
+                            diffMs = Time.posixToMillis target - Time.posixToMillis now
+                        in
+                        if diffMs <= 0 then
+                            "00:00:00"
+                        else
+                            let
+                                diffSecs = diffMs // 1000
+                                hours = diffSecs // 3600
+                                minutes = remainderBy 3600 diffSecs // 60
+                                seconds = remainderBy 60 diffSecs
+                                pad num = String.padLeft 2 '0' (String.fromInt num)
+                            in
+                            if hours > 24 then
+                                String.fromInt (hours // 24) ++ "d " ++ pad (remainderBy 24 hours) ++ "h " ++ pad minutes ++ "m"
+                            else
+                                pad hours ++ ":" ++ pad minutes ++ ":" ++ pad seconds
+
+                    Nothing ->
+                        "Never"
     in
     div [ class ("quota-card state-" ++ cardState), attribute "data-quota-name" name ]
         [ div [ class "card-header" ]
