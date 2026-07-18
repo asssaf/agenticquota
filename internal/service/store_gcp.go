@@ -104,9 +104,12 @@ func (s *gcpStore) SaveQuota(ctx context.Context, quota model.QuotaResponse) err
 
 	for name, details := range quota.Quota {
 		tsFrac := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/remaining_fraction", name, details.RemainingFraction, now)
-		tsInSecs := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_in_seconds", name, details.ResetInSeconds, now)
-		tsTime := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_time_epoch", name, details.ResetTime.Unix(), now)
-		timeSeries = append(timeSeries, tsFrac, tsInSecs, tsTime)
+		timeSeries = append(timeSeries, tsFrac)
+		if details.RemainingFraction < 1.0 {
+			tsInSecs := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_in_seconds", name, details.ResetInSeconds, now)
+			tsTime := makeTimeSeries(s.projectID, "custom.googleapis.com/quota/reset_time_epoch", name, details.ResetTime.Unix(), now)
+			timeSeries = append(timeSeries, tsInSecs, tsTime)
+		}
 	}
 
 	if len(timeSeries) == 0 {

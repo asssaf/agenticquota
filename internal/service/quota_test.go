@@ -108,6 +108,11 @@ func TestQuotaService_GCP(t *testing.T) {
 				ResetTime:         resetTime2,
 				ResetInSeconds:    9000,
 			},
+			"100percent-quota": {
+				RemainingFraction: 1.0,
+				ResetTime:         time.Time{},
+				ResetInSeconds:    0,
+			},
 		},
 	}
 	err = svc.SaveQuota(context.Background(), payload)
@@ -115,9 +120,9 @@ func TestQuotaService_GCP(t *testing.T) {
 		t.Fatalf("SaveQuota failed: %v", err)
 	}
 
-	// Assert on the mockCli.timeSeries content: 2 metrics * 3 types = 6 time series
-	if len(mockCli.timeSeries) != 6 {
-		t.Fatalf("expected 6 time series written, got %d", len(mockCli.timeSeries))
+	// Assert on the mockCli.timeSeries content: 2 metrics * 3 types + 1 metric * 1 type = 7 time series
+	if len(mockCli.timeSeries) != 7 {
+		t.Fatalf("expected 7 time series written, got %d", len(mockCli.timeSeries))
 	}
 
 	// 3. GetQuota -> expect it to retrieve the saved data from mockCli
@@ -126,8 +131,8 @@ func TestQuotaService_GCP(t *testing.T) {
 		t.Fatalf("GetQuota failed: %v", err)
 	}
 
-	if len(res.Quota) != 2 {
-		t.Fatalf("expected 2 quotas in response, got %d", len(res.Quota))
+	if len(res.Quota) != 3 {
+		t.Fatalf("expected 3 quotas in response, got %d", len(res.Quota))
 	}
 
 	details1, ok := res.Quota["3p-5h"]
@@ -156,6 +161,20 @@ func TestQuotaService_GCP(t *testing.T) {
 	}
 	if details2.ResetInSeconds != 9000 {
 		t.Errorf("expected reset in seconds 9000, got %d", details2.ResetInSeconds)
+	}
+
+	details3, ok := res.Quota["100percent-quota"]
+	if !ok {
+		t.Fatal("expected key '100percent-quota' in retrieved quota")
+	}
+	if details3.RemainingFraction != 1.0 {
+		t.Errorf("expected remaining fraction 1.0, got %f", details3.RemainingFraction)
+	}
+	if !details3.ResetTime.IsZero() {
+		t.Errorf("expected reset time to be zero, got %v", details3.ResetTime)
+	}
+	if details3.ResetInSeconds != 0 {
+		t.Errorf("expected reset in seconds to be 0, got %d", details3.ResetInSeconds)
 	}
 }
 

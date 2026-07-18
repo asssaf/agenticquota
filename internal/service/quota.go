@@ -98,6 +98,16 @@ func (s *quotaService) GetQuota(ctx context.Context) (model.QuotaResponse, error
 // SaveQuota stores a new quota report.
 func (s *quotaService) SaveQuota(ctx context.Context, quota model.QuotaResponse) error {
 	s.invalidateCache()
+
+	// Clear reset details for 100% fraction quotas, as the reset timer doesn't start
+	for name, details := range quota.Quota {
+		if details.RemainingFraction == 1.0 {
+			details.ResetTime = time.Time{}
+			details.ResetInSeconds = 0
+			quota.Quota[name] = details
+		}
+	}
+
 	return s.store.SaveQuota(ctx, quota)
 }
 
