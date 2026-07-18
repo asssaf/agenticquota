@@ -397,3 +397,71 @@ func TestQuotaHandler_PostQuota_ValidationFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestQuotaHandler_PostQuota_Success100PercentWithSuppliedReset(t *testing.T) {
+	t.Setenv("QUOTA_API_KEY", "testkey")
+	svc := service.NewQuotaService()
+	h := NewQuotaHandler(svc)
+
+	// Post a quota with 100% fraction and supplied reset time / reset in seconds (which should be cleared/ignored)
+	payload := model.QuotaResponse{
+		Quota: map[string]model.QuotaDetails{
+			"3p-5h": {
+				RemainingFraction: 1.0,
+				ResetTime:         time.Now().Add(2 * time.Hour),
+				ResetInSeconds:    7200,
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := http.NewRequest("POST", "/api/v1/quota", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-API-Key", "testkey")
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	h.HandleQuota(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK, got: %d, response: %s", rr.Code, rr.Body.String())
+	}
+
+	// Verify that reset_time is cleared/not recorded
+	reqGet, err := http.NewRequest("GET", "/api/v1/quota", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqGet.Header.Set("X-API-Key", "testkey")
+
+	rrGet := httptest.NewRecorder()
+	h.HandleQuota(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK for GET, got: %d", rrGet.Code)
+	}
+
+	var resp model.QuotaResponse
+	if err := json.NewDecoder(rrGet.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+
+	details, ok := resp.Quota["3p-5h"]
+	if !ok {
+		t.Fatal("expected '3p-5h' key in quota response")
+	}
+	if details.RemainingFraction != 1.0 {
+		t.Errorf("expected remaining_fraction 1.0, got: %f", details.RemainingFraction)
+	}
+	if !details.ResetTime.IsZero() {
+		t.Errorf("expected reset_time to be zero, got: %v", details.ResetTime)
+	}
+	if details.ResetInSeconds != 0 {
+		t.Errorf("expected reset_in_seconds to be 0, got: %d", details.ResetInSeconds)
+	}
+}
