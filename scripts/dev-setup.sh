@@ -19,6 +19,7 @@ if ! command -v mise &> /dev/null; then
     mkdir -p "${HOST_CACHE_DIR}/mise/bin"
     MISE_INSTALL_PATH="${HOST_CACHE_DIR}/mise/bin/mise" sh -c "$(curl -fsSL https://mise.run)"
 fi
+mise trust ~/work/mise.toml
 
 # 2. Install tools declared in mise.toml
 if [ -f "/home/user/work/mise.toml" ]; then
