@@ -201,15 +201,15 @@ The server dynamically loads `app.yaml`, merges `env_variables.yaml` for environ
 ## Integration Testing with dev_appserver.py
 
 ### 1. Prerequisites (Local SDK Installation)
-If you do not have Go, the Google Cloud SDK, and the App Engine Go component installed, run our helper installation script to install Go (via apt), configure the Go workspace and cache under `~/host-cache/go`, and download/configure the SDK under `~/host-cache/gcloud`:
+If you do not have Go, Python, Elm, the Google Cloud SDK, and the App Engine Go component installed, run our helper installation script to bootstrap `mise` and install the tools:
 
 ```bash
 ./scripts/dev-setup.sh
 ```
 
-Before running the tests, add the installed SDK binaries to your environment path:
+Before running the tests, load the `mise` environment configuration into your current shell:
 ```bash
-export PATH="$HOME/host-cache/gcloud/google-cloud-sdk/bin:$PATH"
+eval "$(~/host-cache/mise/bin/mise env -s bash)"
 ```
 
 ### 2. Run the integration tests:

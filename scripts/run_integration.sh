@@ -37,7 +37,7 @@ trap cleanup EXIT
 # 3. Start dev_appserver.py in the background
 PORT=8085
 echo "Starting dev_appserver.py on port $PORT..."
-dev_appserver.py --port=$PORT --enable_host_checking=false app.yaml &
+dev_appserver.py --port=$PORT --enable_host_checking=false --clear_datastore=true app.yaml &
 DEV_SERVER_PID=$!
 
 # Wait for server to start responding

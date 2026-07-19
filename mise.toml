@@ -1,0 +1,11 @@
+[tools]
+go = "1.25.8"
+elm = "0.19.1"
+python = "3.12"  # newer than 3.12 is not supported by dev_appserver.py
+gcloud = { version = "575.0.0", postinstall = "gcloud components install app-engine-go --quiet" }
+
+[env]
+GOPATH = "${HOME}/host-cache/go"
+GOCACHE = "${HOME}/host-cache/go/cache"
+GOTOOLCHAIN = "local"
+GOOGLE_APPLICATION_CREDENTIALS = "/dev/null"
