@@ -30,5 +30,5 @@ Verification Requirement:
 - When making changes to the codebase, ensure that `README.md` and the technical specifications in the `specs/` directory are updated if the changes are relevant to documented features.
 - Before submitting any changes, you must run the appropriate lint and format tools locally to ensure the code complies with the project's standards and doesn't fail in the CI workflow
 - Don't include hardcoded keys, secrets and other sensitive information in source files. They should be written to a .env file which is not committed to source control.
-- When installing a needed tool, try to install it using `mise` if available. Otherwise, install it to `~/host-cache/<tool>/<version>` by adding the installation commands to the `scripts/dev-setup.sh` script. Ensure the script checks if the specific tool version is already present before installing it, to avoid unnecessary downloads and prevent overwriting existing installations.
+- When installing a needed tool, add it to `mise.toml` to manage it via `mise` if supported. Otherwise, install it to `~/host-cache/<tool>/<version>` by adding the installation commands to the `scripts/dev-setup.sh` script. Ensure any custom script checks if the specific tool version is already present before installing it, to avoid unnecessary downloads and prevent overwriting existing installations.
 
