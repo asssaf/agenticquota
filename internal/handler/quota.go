@@ -68,10 +68,13 @@ func (h *QuotaHandler) getQuota(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.GetQuota(r.Context())
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "no quota data found",
-			})
+			w.WriteHeader(http.StatusOK)
+			emptyResp := model.QuotaResponse{
+				Quota: make(map[string]model.QuotaDetails),
+			}
+			if err := json.NewEncoder(w).Encode(emptyResp); err != nil {
+				log.Printf("Error encoding empty quota: %v", err)
+			}
 			return
 		}
 		log.Printf("Error retrieving quota: %v", err)
