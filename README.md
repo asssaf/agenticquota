@@ -85,12 +85,12 @@ curl -i -X POST \
     "quota": {
       "3p-5h": {
         "remaining_fraction": 1.0,
-        "reset_time": "2026-07-08T10:00:52Z",
+        "reset_time": "2028-01-01T10:00:52Z",
         "reset_in_seconds": 17999
       },
       "gemini-5h": {
         "remaining_fraction": 0.81359,
-        "reset_time": "2026-07-08T07:14:43Z",
+        "reset_time": "2028-01-01T07:14:43Z",
         "reset_in_seconds": 8030
       }
     }

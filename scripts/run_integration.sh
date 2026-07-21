@@ -80,15 +80,19 @@ fi
 
 # Case C: POST Quota -> Should be 200 OK
 echo -n "Test Case C (Authenticated POST): "
-PAYLOAD='{
+FUTURE_RESET=$(date -u -d "+1 day" +"%Y-%m-%dT%H:%M:%SZ")
+PAYLOAD=$(cat <<EOF
+{
   "quota": {
     "3p-5h": {
       "remaining_fraction": 0.85,
-      "reset_time": "2026-07-08T10:00:52Z",
+      "reset_time": "$FUTURE_RESET",
       "reset_in_seconds": 17999
     }
   }
-}'
+}
+EOF
+)
 CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST \
   -H "X-API-Key: test-integration-key" \
