@@ -11,11 +11,11 @@ if ! command -v dev_appserver.py &> /dev/null; then
 fi
 
 # 2. Setup mock env variables configuration for GAE dev server
-# Create temporary env_variables.yaml if not present
+# Create temporary env_variables.yaml if not present (required by app.yaml includes)
 TEMP_ENV_CREATED=false
 if [ ! -f "env_variables.yaml" ]; then
-    echo "Creating temporary env_variables.yaml for testing..."
-    echo -e "env_variables:\n  QUOTA_API_KEY: \"test-integration-key\"" > env_variables.yaml
+    echo "Creating temporary env_variables.yaml for dev_appserver includes..."
+    echo "env_variables:" > env_variables.yaml
     TEMP_ENV_CREATED=true
 fi
 
@@ -37,7 +37,7 @@ trap cleanup EXIT
 # 3. Start dev_appserver.py in the background
 PORT=8085
 echo "Starting dev_appserver.py on port $PORT..."
-dev_appserver.py --port=$PORT --enable_host_checking=false --clear_datastore=true app.yaml &
+dev_appserver.py --port=$PORT --enable_host_checking=false --clear_datastore=true --env_var QUOTA_API_KEY=test-integration-key app.yaml &
 DEV_SERVER_PID=$!
 
 # Wait for server to start responding
