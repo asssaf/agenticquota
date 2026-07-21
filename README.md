@@ -70,10 +70,10 @@ curl -i http://localhost:8080/api/v1/quota
 # Expected Output: 401 Unauthorized
 ```
 
-#### C. Get Quota (Authenticated but empty - 404)
+#### C. Get Quota (Authenticated but empty - 200)
 ```bash
 curl -i -H "X-API-Key: your-secret-api-key" http://localhost:8080/api/v1/quota
-# Expected Output: 404 Not Found
+# Expected Output: 200 OK with empty quota JSON, e.g. {"quota":{}}
 ```
 
 #### D. Report/POST Quota (Authenticated - 200 OK)
@@ -221,7 +221,7 @@ This script:
 1. Verifies that `dev_appserver.py` is present in your command line search path.
 2. Checks for or temporarily generates `env_variables.yaml`.
 3. Launches the dev server in the background on port `8085`.
-4. Executes curl integration calls verifying API authentication, GET behavior when empty (404), POST behavior (200), and GET matching of posted payloads.
+4. Executes curl integration calls verifying API authentication, GET behavior when empty (200), POST behavior (200), and GET matching of posted payloads.
 5. Shuts down the background dev server cleanly upon completion or error.
 
 ---

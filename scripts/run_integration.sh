@@ -68,13 +68,13 @@ else
     exit 1
 fi
 
-# Case B: Get Quota (Authenticated but Empty) -> Should be 404 Not Found
+# Case B: Get Quota (Authenticated but Empty) -> Should be 200 OK
 echo -n "Test Case B (Authenticated GET Empty): "
 CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-API-Key: test-integration-key" http://localhost:$PORT/api/v1/quota)
-if [ "$CODE" -eq 404 ]; then
+if [ "$CODE" -eq 200 ]; then
     echo "PASS"
 else
-    echo "FAIL (Got status $CODE, expected 404)"
+    echo "FAIL (Got status $CODE, expected 200)"
     exit 1
 fi
 

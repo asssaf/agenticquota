@@ -30,7 +30,7 @@ func TestQuotaHandler_APIKeyMiddleware_Unauthorized(t *testing.T) {
 	}
 }
 
-func TestQuotaHandler_GetQuota_NotFound(t *testing.T) {
+func TestQuotaHandler_GetQuota_Empty(t *testing.T) {
 	t.Setenv("QUOTA_API_KEY", "testkey")
 	svc := service.NewQuotaService()
 	h := NewQuotaHandler(svc)
@@ -45,8 +45,16 @@ func TestQuotaHandler_GetQuota_NotFound(t *testing.T) {
 	handler := APIKeyMiddleware(http.HandlerFunc(h.HandleQuota))
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusNotFound {
-		t.Errorf("expected status 404 Not Found, got: %d", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200 OK, got: %d", rr.Code)
+	}
+
+	var resp model.QuotaResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if len(resp.Quota) != 0 {
+		t.Errorf("expected empty quota list, got: %v", resp.Quota)
 	}
 }
 
@@ -152,9 +160,17 @@ func TestQuotaHandler_GetQuota_DefaultKeyFallback(t *testing.T) {
 	handler := APIKeyMiddleware(http.HandlerFunc(h.HandleQuota))
 	handler.ServeHTTP(rrSuccess, reqSuccess)
 
-	// Since database is empty, it should bypass authentication but return 404
-	if rrSuccess.Code != http.StatusNotFound {
-		t.Errorf("expected fallback authentication success followed by status 404, got: %d", rrSuccess.Code)
+	// Since database is empty, it should bypass authentication and return 200 OK
+	if rrSuccess.Code != http.StatusOK {
+		t.Errorf("expected fallback authentication success followed by status 200, got: %d", rrSuccess.Code)
+	}
+
+	var resp model.QuotaResponse
+	if err := json.NewDecoder(rrSuccess.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if len(resp.Quota) != 0 {
+		t.Errorf("expected empty quota list, got: %v", resp.Quota)
 	}
 }
 
